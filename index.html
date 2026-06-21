@@ -155,6 +155,24 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 .apikey-row .field-input{flex:1;font-size:13px;padding:9px 11px}
 .apikey-hint{font-size:11px;color:var(--text-sub);margin-top:5px}
 .apikey-hint a{color:var(--gold-lt)}
+
+/* DAY DETAIL */
+.day-row{cursor:pointer;transition:background .15s}
+.day-row:hover{background:rgba(255,255,255,0.1)}
+.day-row.selected{background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.5)}
+.day-row .chevron{font-size:12px;color:var(--text-sub);margin-left:4px;transition:transform .2s}
+.day-row.selected .chevron{transform:rotate(90deg);color:var(--gold)}
+.day-detail{background:rgba(0,0,0,0.2);border:1px solid var(--card-border);border-radius:var(--radius-sm);margin-top:4px;overflow:hidden;max-height:0;transition:max-height .35s ease}
+.day-detail.open{max-height:800px}
+.day-detail-inner{padding:10px 12px}
+.dh-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,0.06)}
+.dh-row:last-child{border-bottom:none}
+.dh-time{font-size:12px;color:var(--text-sub);min-width:42px}
+.dh-icon{font-size:18px;min-width:24px;text-align:center}
+.dh-temp{font-size:14px;font-weight:700;min-width:46px}
+.dh-rain{font-size:11px;color:#60a5fa;min-width:40px}
+.dh-wind{font-size:11px;color:var(--text-sub);min-width:52px}
+.dh-band{font-size:10px;color:var(--text-sub);flex:1;text-align:right}
 </style>
 </head>
 <body>
@@ -843,18 +861,87 @@ function renderWeek(m, city) {
     const code = m.daily.weathercode[i];
     const rain = Math.round(m.daily.precipitation_probability_max[i]||0);
     const sp   = Math.round(m.daily.temperature_max_spread[i]||0);
-    rows += `<div class="day-row">
-      <span class="day-name">${label}<br><span style="font-size:11px;color:var(--text-sub)">${d.getDate()} ${MESI[d.getMonth()]}${sp>2?` <span style="color:var(--gold-lt);font-size:10px">±${Math.round(sp/2)}°</span>`:''}</span></span>
-      <span class="day-icon">${wIcon(code,1)}</span>
-      <span class="day-rain">${rain>5?'💧'+rain+'%':''}</span>
-      <span class="day-range"><span class="mn">${disp(minT)} </span><span class="mx ${tClass(maxT)}">${disp(maxT)}</span></span>
-    </div>`;
+    rows += `
+      <div class="day-row" data-date="${dateStr}" data-i="${i}">
+        <span class="day-name">${label}<br>
+          <span style="font-size:11px;color:var(--text-sub)">${d.getDate()} ${MESI[d.getMonth()]}${sp>2?` <span style="color:var(--gold-lt);font-size:10px">±${Math.round(sp/2)}°</span>`:''}</span>
+        </span>
+        <span class="day-icon">${wIcon(code,1)}</span>
+        <span class="day-rain">${rain>5?'💧'+rain+'%':''}</span>
+        <span class="day-range"><span class="mn">${disp(minT)} </span><span class="mx ${tClass(maxT)}">${disp(maxT)}</span></span>
+        <span class="chevron">›</span>
+      </div>
+      <div class="day-detail" id="detail-${dateStr}">
+        <div class="day-detail-inner" id="detail-inner-${dateStr}"></div>
+      </div>`;
   });
+
   document.getElementById('weekly-content').innerHTML = `
     <div style="margin:8px 14px 14px">
       <p class="section-title" style="margin:0 0 10px">7 giorni — ${city.name}</p>
       <div class="daily-list">${rows}</div>
     </div>`;
+
+  // Attach click handlers
+  document.querySelectorAll('.day-row[data-date]').forEach(row => {
+    row.addEventListener('click', () => {
+      const date = row.dataset.date;
+      const detailEl = document.getElementById('detail-' + date);
+      const isOpen = detailEl.classList.contains('open');
+
+      // Close all
+      document.querySelectorAll('.day-detail').forEach(el => el.classList.remove('open'));
+      document.querySelectorAll('.day-row').forEach(el => el.classList.remove('selected'));
+
+      if (!isOpen) {
+        row.classList.add('selected');
+        detailEl.classList.add('open');
+        // Populate if empty
+        const inner = document.getElementById('detail-inner-' + date);
+        if (!inner.innerHTML) {
+          inner.innerHTML = buildDayDetail(m, date);
+        }
+      }
+    });
+  });
+}
+
+function buildDayDetail(m, dateStr) {
+  const {hourly, ensembleBand} = m;
+  const slots = hourly.time
+    .map((t,i) => ({t,i}))
+    .filter(x => x.t.startsWith(dateStr));
+
+  if (!slots.length) return '<div style="padding:8px;color:var(--text-sub);font-size:13px">Dati non disponibili.</div>';
+
+  return slots.map(({t,i}) => {
+    const h    = parseInt(t.slice(11,13));
+    const temp = hourly.temperature_2m[i];
+    const code = hourly.weathercode[i];
+    const isD  = hourly.is_day[i];
+    const rain = Math.round(hourly.precipitation_probability[i]||0);
+    const wind = Math.round(hourly.windspeed_10m[i]||0);
+    const sp   = hourly.temperature_spread[i]||0;
+
+    // Banda ensemble se disponibile
+    const timeKey = t.slice(0,13);
+    const band = ensembleBand?.bandMap?.[timeKey];
+    let bandStr = '';
+    if (band?.p10 != null && band?.p90 != null) {
+      bandStr = `${disp(band.p10)}–${disp(band.p90)}`;
+    } else if (sp > 1) {
+      bandStr = `±${Math.round(sp/2)}°`;
+    }
+
+    return `<div class="dh-row">
+      <span class="dh-time">${h}:00</span>
+      <span class="dh-icon">${wIcon(code,isD)}</span>
+      <span class="dh-temp ${tClass(temp)}">${disp(temp)}</span>
+      <span class="dh-rain">${rain>3?'💧'+rain+'%':''}</span>
+      <span class="dh-wind">${wind>0?'💨'+wind+' km/h':''}</span>
+      <span class="dh-band">${bandStr}</span>
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════
