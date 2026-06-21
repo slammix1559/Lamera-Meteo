@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#1a2744">
-<meta name="description" content="Meteo Lamera – previsioni aggregate multi-modello">
+<meta name="description" content="Meteo Italia – previsioni aggregate multi-modello">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Meteo Lamera">
+<meta name="apple-mobile-web-app-title" content="Meteo">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<title>Meteo Lamera</title>
+<title>Meteo Italia</title>
 <style>
 :root{
   --sky-deep:#0d1b3e;--sky-mid:#1a2d5a;--sky-glow:#2563a8;
@@ -178,7 +178,7 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 <body>
 
 <div class="top-bar">
-  <div class="app-title">🌤 Meteo Lamera <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
+  <div class="app-title">🌤 Meteo Italia <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
   <button class="btn-icon" id="btn-open-settings" aria-label="Impostazioni">⚙️</button>
 </div>
 
@@ -879,12 +879,14 @@ function renderToday(m, city) {
   let strip = '';
   for (let k=startI; k<Math.min(startI+24, hourly.time.length); k++) {
     const h = parseInt(hourly.time[k].slice(11,13));
-    const t = hourly.temperature_2m[k];
-    const sp = hourly.temperature_spread[k];
-    const rain = Math.round(hourly.precipitation_probability[k]||0);
-    const code = hourly.weathercode[k];
-    const isD = hourly.is_day[k];
     const isNow = k===startI;
+    // Per l'ora corrente usa curTemp/curCode dal merge (calcolati su tutte le fonti)
+    // Per le ore successive usa i valori della serie oraria
+    const t    = isNow ? (curTemp ?? hourly.temperature_2m[k])   : hourly.temperature_2m[k];
+    const code = isNow ? (curCode ?? hourly.weathercode[k])       : hourly.weathercode[k];
+    const isD  = isNow ? curIsDay                                  : hourly.is_day[k];
+    const sp   = hourly.temperature_spread[k];
+    const rain = isNow ? Math.round(curProb||0) : Math.round(hourly.precipitation_probability[k]||0);
     // Banda ensemble p10-p90 per questo slot
     const timeKey = hourly.time[k].slice(0,13);
     const band = m.ensembleBand?.bandMap?.[timeKey];
