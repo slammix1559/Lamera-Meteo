@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a2744">
+<meta name="description" content="Meteo Italia – previsioni aggregate multi-modello">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Meteo">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Meteo Italia</title>
+<style>
+:root{
+  --sky-deep:#0d1b3e;--sky-mid:#1a2d5a;--sky-glow:#2563a8;
+  --gold:#f59e0b;--gold-lt:#fcd34d;--dawn:#fb923c;
+  --text:#e8f0fe;--text-sub:#93a8d4;
+  --card-bg:rgba(255,255,255,0.07);--card-border:rgba(255,255,255,0.12);
+  --radius:14px;--radius-sm:8px;
+  --hot:#ef4444;--warm:#f97316;--mild:#facc15;--cool:#60a5fa;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-bottom:84px}
+
+/* TOP BAR */
+.top-bar{background:linear-gradient(180deg,var(--sky-mid) 0%,transparent 100%);padding:18px 16px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.app-title{font-size:17px;font-weight:600;letter-spacing:.01em;display:flex;align-items:center;gap:6px}
+.btn-icon{background:var(--card-bg);border:1px solid var(--card-border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);font-size:17px;transition:background .2s;flex-shrink:0}
+.btn-icon:hover{background:rgba(255,255,255,0.14)}
+
+/* INSTALL BANNER */
+#install-banner{display:none;margin:0 14px 10px;background:rgba(37,99,168,0.3);border:1px solid rgba(96,165,250,0.4);border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;color:#bfdbfe;align-items:center;gap:10px;justify-content:space-between}
+#install-banner button{background:var(--sky-glow);border:none;border-radius:6px;color:white;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;white-space:nowrap}
+#install-banner .dismiss{background:none;color:var(--text-sub);font-size:18px;padding:0 4px}
+
+/* ALLERTA */
+.allerta-bar{margin:0 14px 10px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:var(--radius-sm);padding:9px 13px;font-size:12px;color:#fca5a5}
+
+/* SOURCES STATUS */
+.sources-bar{margin:0 14px 12px;display:flex;gap:6px;flex-wrap:wrap}
+.src-badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;border:1px solid transparent;display:flex;align-items:center;gap:4px}
+.src-badge.ok{background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);color:#86efac}
+.src-badge.loading{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.3);color:#fcd34d}
+.src-badge.err{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:#fca5a5}
+.src-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* HERO */
+.hero{margin:0 14px 14px;background:linear-gradient(135deg,var(--sky-mid) 0%,var(--sky-glow) 100%);border:1px solid var(--card-border);border-radius:22px;padding:22px 20px 18px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;background:radial-gradient(circle,rgba(245,158,11,0.18) 0%,transparent 70%);pointer-events:none}
+.hero-city{font-size:14px;color:var(--text-sub);margin-bottom:4px}
+.hero-city span{color:var(--gold-lt);font-weight:600}
+.hero-temp{font-size:68px;font-weight:300;line-height:1;letter-spacing:-3px}
+.hero-temp sup{font-size:26px;vertical-align:top;margin-top:12px;display:inline-block}
+.hero-cond{font-size:17px;color:var(--text-sub);margin-top:4px}
+.hero-icon{position:absolute;right:18px;top:18px;font-size:56px;opacity:.9}
+.hero-meta{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap}
+.hero-meta-item{display:flex;flex-direction:column;gap:2px}
+.hero-meta-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-sub)}
+.hero-meta-value{font-size:14px;font-weight:500}
+
+/* CONFIDENCE METER */
+.confidence-wrap{margin:0 14px 12px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:10px 13px}
+.conf-label{font-size:11px;color:var(--text-sub);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.conf-bar-wrap{display:flex;gap:8px;align-items:center}
+.conf-track{flex:1;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden}
+.conf-fill{height:8px;border-radius:4px;transition:width .6s ease}
+.conf-pct{font-size:13px;font-weight:600;min-width:36px;text-align:right}
+.conf-detail{font-size:11px;color:var(--text-sub);margin-top:5px}
+
+/* MODEL COMPARISON */
+.model-grid{margin:0 14px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.model-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:8px 10px;text-align:center}
+.model-name{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-sub);margin-bottom:4px}
+.model-temp{font-size:17px;font-weight:600}
+.model-diff{font-size:10px;margin-top:2px}
+.model-diff.plus{color:#86efac}
+.model-diff.minus{color:#fca5a5}
+.model-diff.zero{color:var(--text-sub)}
+
+/* SECTION TITLE */
+.section-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-sub);margin:0 14px 8px}
+
+/* HOURLY */
+.hourly-scroll{overflow-x:auto;padding:0 14px 8px;scrollbar-width:none}
+.hourly-scroll::-webkit-scrollbar{display:none}
+.hourly-strip{display:flex;gap:8px;min-width:max-content}
+.hour-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius);padding:11px 9px;text-align:center;min-width:56px;transition:background .2s}
+.hour-card.now{background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.5)}
+.h-time{font-size:11px;color:var(--text-sub);margin-bottom:5px}
+.h-icon{font-size:21px;margin-bottom:5px}
+.h-temp{font-size:14px;font-weight:600}
+.h-rain{font-size:10px;color:#60a5fa;margin-top:3px}
+.h-spread{font-size:9px;color:var(--text-sub);margin-top:1px}
+
+/* DAILY */
+.daily-list{margin:0 14px;display:flex;flex-direction:column;gap:6px}
+.day-row{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);display:flex;align-items:center;padding:11px 14px;gap:10px}
+.day-name{flex:1;font-size:14px;font-weight:500}
+.day-icon{font-size:20px;min-width:28px;text-align:center}
+.day-rain{font-size:12px;color:#60a5fa;min-width:36px;text-align:right}
+.day-range{font-size:14px;min-width:80px;text-align:right}
+.day-range .mn{color:var(--text-sub)}
+.day-range .mx{font-weight:600}
+
+/* TEMP COLORS */
+.t-hot{color:var(--hot)}.t-warm{color:var(--warm)}.t-mild{color:var(--mild)}.t-cool{color:var(--cool)}
+
+/* LOADING */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px;color:var(--text-sub);font-size:14px;text-align:center;padding:20px}
+.spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-msg{font-size:13px;color:var(--text-sub)}
+
+/* DRAWER */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100;backdrop-filter:blur(3px)}
+.overlay.open{display:block}
+.drawer{position:fixed;bottom:0;left:0;right:0;background:#1a2744;border-top:1px solid var(--card-border);border-radius:22px 22px 0 0;padding:0 20px 40px;z-index:101;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:85vh;overflow-y:auto}
+.drawer.open{transform:translateY(0)}
+.drawer-handle{width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:12px auto 20px}
+.drawer h2{font-size:16px;font-weight:600;margin-bottom:20px}
+.field-group{margin-bottom:18px}
+.field-label{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-sub);margin-bottom:6px}
+.field-input{width:100%;background:rgba(255,255,255,0.08);border:1px solid var(--card-border);border-radius:var(--radius-sm);color:var(--text);font-size:15px;padding:11px 13px;outline:none}
+.field-input:focus{border-color:var(--gold)}
+.btn-primary{width:100%;background:var(--gold);color:#1a2744;border:none;border-radius:var(--radius-sm);padding:13px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:background .2s}
+.btn-primary:hover{background:var(--gold-lt)}
+.search-results{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.result-item{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:11px 13px;cursor:pointer;font-size:14px;transition:background .15s}
+.result-item:hover{background:rgba(255,255,255,0.14)}
+.r-name{font-weight:500}
+.r-sub{font-size:12px;color:var(--text-sub);margin-top:2px}
+.saved-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.saved-item{display:flex;align-items:center;justify-content:space-between;background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:10px 13px}
+.saved-item.active-city{border-color:var(--gold);background:rgba(245,158,11,0.1)}
+.saved-item-name{font-size:14px;cursor:pointer;flex:1}
+.btn-del{background:none;border:none;color:var(--text-sub);font-size:18px;cursor:pointer;padding:2px 6px}
+.btn-set-default{background:none;border:1px solid var(--card-border);border-radius:6px;color:var(--text-sub);font-size:11px;padding:3px 8px;cursor:pointer;margin-right:6px;white-space:nowrap}
+.btn-set-default.is-default{border-color:var(--gold);color:var(--gold-lt)}
+
+/* NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(13,27,62,0.96);border-top:1px solid var(--card-border);display:flex;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding-bottom:env(safe-area-inset-bottom);z-index:50}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0;background:none;border:none;color:var(--text-sub);font-size:11px;cursor:pointer;gap:3px;transition:color .2s}
+.nav-btn.active{color:var(--gold)}
+.ni{font-size:22px}
+
+/* VIEWS */
+.view{display:none}
+.view.active{display:block}
+
+/* API KEY SECTION */
+.apikey-row{display:flex;gap:8px;align-items:center}
+.apikey-row .field-input{flex:1;font-size:13px;padding:9px 11px}
+.apikey-hint{font-size:11px;color:var(--text-sub);margin-top:5px}
+.apikey-hint a{color:var(--gold-lt)}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="app-title">🌤 Meteo Italia <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
+  <button class="btn-icon" id="btn-open-settings" aria-label="Impostazioni">⚙️</button>
+</div>
+
+<div id="install-banner">
+  <span>📲 Installa l'app sul telefono</span>
+  <div style="display:flex;gap:6px;align-items:center">
+    <button id="btn-install">Installa</button>
+    <button class="dismiss" id="btn-dismiss-install">✕</button>
+  </div>
+</div>
+
+<div id="view-oggi" class="view active">
+  <div id="main-content"><div class="state-box"><div class="spinner"></div><span class="load-msg">Interrogo i modelli meteorologici…</span></div></div>
+</div>
+
+<div id="view-settimana" class="view">
+  <div id="weekly-content"><div class="state-box"><div class="spinner"></div></div></div>
+</div>
+
+<div id="view-modelli" class="view">
+  <div id="models-content"><div class="state-box"><div class="spinner"></div></div></div>
+</div>
+
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-view="oggi" aria-label="Oggi"><span class="ni">🌡️</span><span>Oggi</span></button>
+  <button class="nav-btn" data-view="settimana" aria-label="Settimana"><span class="ni">📅</span><span>7 giorni</span></button>
+  <button class="nav-btn" data-view="modelli" aria-label="Modelli"><span class="ni">🔬</span><span>Modelli</span></button>
+</nav>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-handle"></div>
+  <h2>⚙️ Impostazioni</h2>
+
+  <div class="field-group">
+    <div class="field-label">Cerca città</div>
+    <div style="display:flex;gap:8px">
+      <input class="field-input" id="city-search-input" type="text" placeholder="Es: Saronno, Milano, Roma…" autocomplete="off">
+      <button class="btn-icon" id="btn-city-search" style="border-radius:var(--radius-sm);width:44px;flex-shrink:0">🔍</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+
+  <div class="field-group">
+    <div class="field-label">Città salvate</div>
+    <div class="saved-list" id="saved-list"></div>
+  </div>
+
+  <div class="field-group">
+    <div class="field-label">OpenWeatherMap API Key <span style="color:#86efac;font-size:10px">(opzionale, +1 fonte)</span></div>
+    <div class="apikey-row">
+      <input class="field-input" id="owm-key" type="password" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <button class="btn-icon" style="border-radius:var(--radius-sm);width:44px;flex-shrink:0" id="btn-save-key">💾</button>
+    </div>
+    <div class="apikey-hint">Gratuita su <a href="https://home.openweathermap.org/api_keys" target="_blank">openweathermap.org</a> (60 call/min, no carta)</div>
+  </div>
+
+  <div class="field-group">
+    <div class="field-label">Unità temperatura</div>
+    <select class="field-input" id="unit-select">
+      <option value="celsius">Celsius (°C)</option>
+      <option value="fahrenheit">Fahrenheit (°F)</option>
+    </select>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const S = {
+  cities: JSON.parse(localStorage.getItem('mw_cities') || '[]'),
+  defaultCity: JSON.parse(localStorage.getItem('mw_default') || 'null'),
+  unit: localStorage.getItem('mw_unit') || 'celsius',
+  owmKey: localStorage.getItem('mw_owm') || '',
+  results: {},   // keyed by model id → {hourly, daily, current}
+  merged: null,
+};
+if (!S.defaultCity) {
+  S.defaultCity = {name:'Saronno',lat:45.6254,lon:9.0346,country:'IT'};
+  S.cities = [S.defaultCity];
+  persist();
+}
+function persist() {
+  localStorage.setItem('mw_cities', JSON.stringify(S.cities));
+  localStorage.setItem('mw_default', JSON.stringify(S.defaultCity));
+  localStorage.setItem('mw_unit', S.unit);
+  localStorage.setItem('mw_owm', S.owmKey);
+}
+
+// ═══════════════════════════════════════════════════════
+// SOURCES DEFINITION
+// ═══════════════════════════════════════════════════════
+// All Open-Meteo endpoints: each uses a different NWP model
+// weight = reliability weight for Italy (higher = more trusted)
+const SOURCES = [
+  {
+    id: 'ecmwf',
+    label: 'ECMWF IFS',
+    flag: '🇪🇺',
+    weight: 5,
+    type: 'openmeteo',
+    endpoint: 'https://api.open-meteo.com/v1/ecmwf',
+    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+  },
+  {
+    id: 'dwd',
+    label: 'DWD ICON-EU',
+    flag: '🇩🇪',
+    weight: 4,
+    type: 'openmeteo',
+    endpoint: 'https://api.open-meteo.com/v1/dwd-icon',
+    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+  },
+  {
+    id: 'meteofrance',
+    label: 'Météo-France',
+    flag: '🇫🇷',
+    weight: 4,
+    type: 'openmeteo',
+    endpoint: 'https://api.open-meteo.com/v1/meteofrance',
+    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+  },
+  {
+    id: 'gfs',
+    label: 'NOAA GFS',
+    flag: '🇺🇸',
+    weight: 3,
+    type: 'openmeteo',
+    endpoint: 'https://api.open-meteo.com/v1/gfs',
+    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+  },
+  {
+    id: 'italmeteo',
+    label: 'ItaliaMeteo',
+    flag: '🇮🇹',
+    weight: 5,
+    type: 'openmeteo',
+    endpoint: 'https://api.open-meteo.com/v1/italia-meteo-arpae',
+    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+  },
+  {
+    id: 'bestmatch',
+    label: 'Best Match',
+    flag: '🌐',
+    weight: 4,
+    type: 'openmeteo',
+    endpoint: 'https://api.open-meteo.com/v1/forecast',
+    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,sunrise,sunset&current_weather=true&forecast_days=7&timezone=Europe%2FRome',
+  },
+  {
+    id: 'owm',
+    label: 'OpenWeatherMap',
+    flag: '🗺️',
+    weight: 3,
+    type: 'owm',
+    endpoint: 'https://api.openweathermap.org/data/2.5/forecast',
+  },
+  {
+    id: 'ensemble',
+    label: 'Ensemble 51',
+    flag: '🎲',
+    weight: 6,   // peso massimo: è il più robusto statisticamente
+    type: 'ensemble',
+  },
+];
+
+// ═══════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════
+function disp(c) {
+  if (S.unit === 'fahrenheit') return Math.round(c*9/5+32)+'°F';
+  return Math.round(c)+'°C';
+}
+function dispNum(c) {
+  if (S.unit === 'fahrenheit') return Math.round(c*9/5+32);
+  return Math.round(c);
+}
+function tClass(c) {
+  if (c>=35) return 't-hot';
+  if (c>=28) return 't-warm';
+  if (c>=18) return 't-mild';
+  return 't-cool';
+}
+function wIcon(code,day=1){
+  if(!day) return code===0?'🌙':'🌙';
+  if(code===0) return '☀️';
+  if([1,2].includes(code)) return '🌤';
+  if(code===3) return '☁️';
+  if([45,48].includes(code)) return '🌫️';
+  if([51,53,55,56,57].includes(code)) return '🌦️';
+  if([61,63,65,66,67].includes(code)) return '🌧️';
+  if([80,81,82].includes(code)) return '🌧️';
+  if([95,96,99].includes(code)) return '⛈️';
+  if([71,73,75,77].includes(code)) return '❄️';
+  return '🌡️';
+}
+function wLabel(code){
+  const MAP={0:'Sereno',1:'Quasi sereno',2:'Parz. nuvoloso',3:'Coperto',45:'Nebbia',48:'Nebbia gelata',51:'Pioggerella',53:'Pioggerella',55:'Pioggerella',61:'Pioggia',63:'Pioggia',65:'Pioggia intensa',80:'Rovesci',81:'Rovesci',82:'Rovesci intensi',95:'Temporale',96:'Temporale con grandine',99:'Temporale con grandine'};
+  return MAP[code]||'Variabile';
+}
+const DAYS_LONG=['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const MESI=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+
+// ═══════════════════════════════════════════════════════
+// FETCH INDIVIDUAL SOURCES
+// ═══════════════════════════════════════════════════════
+async function fetchOpenMeteo(src, lat, lon) {
+  const url = `${src.endpoint}?latitude=${lat}&longitude=${lon}${src.params}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  const d = await r.json();
+  return normalizeOpenMeteo(d, src.id);
+}
+
+function normalizeOpenMeteo(d, id) {
+  return {
+    source: id,
+    hourly: d.hourly,
+    daily: d.daily,
+    current_weather: d.current_weather || null,
+  };
+}
+
+async function fetchOWM(lat, lon, key) {
+  // current
+  const cur = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric`);
+  if (!cur.ok) throw new Error('OWM ' + cur.status);
+  const curD = await cur.json();
+  // forecast
+  const fcast = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${key}&units=metric&cnt=56`);
+  const fcastD = await fcast.json();
+  return normalizeOWM(curD, fcastD);
+}
+
+function owmCodeToWmo(id) {
+  if (id === 800) return 0;
+  if (id === 801) return 1;
+  if (id === 802) return 2;
+  if ([803,804].includes(id)) return 3;
+  if ([300,301,302,310,311,312,313,314,321].includes(id)) return 51;
+  if ([500,501].includes(id)) return 61;
+  if ([502,503,504].includes(id)) return 65;
+  if ([511].includes(id)) return 66;
+  if ([520,521,522,531].includes(id)) return 80;
+  if ([600,601,602,611,612,613,615,616,620,621,622].includes(id)) return 71;
+  if ([200,201,202,210,211,212,221,230,231,232].includes(id)) return 95;
+  if ([701,711,721,731,741,751,761,762,771,781].includes(id)) return 45;
+  return 3;
+}
+
+function normalizeOWM(cur, fcast) {
+  const times=[], temps=[], probs=[], codes=[], humids=[], winds=[], isdays=[];
+  const dailyMap={};
+  fcast.list.forEach(item=>{
+    const dt=new Date(item.dt*1000);
+    const iso=dt.toISOString().slice(0,13)+':00';
+    times.push(iso);
+    temps.push(item.main.temp);
+    probs.push(Math.round((item.pop||0)*100));
+    codes.push(owmCodeToWmo(item.weather[0].id));
+    humids.push(item.main.humidity);
+    winds.push(item.wind.speed*3.6);
+    isdays.push(dt.getHours()>=6&&dt.getHours()<20?1:0);
+    const dayKey=iso.slice(0,10);
+    if(!dailyMap[dayKey]) dailyMap[dayKey]={max:-99,min:99,codes:[],probs:[]};
+    dailyMap[dayKey].max=Math.max(dailyMap[dayKey].max,item.main.temp_max);
+    dailyMap[dayKey].min=Math.min(dailyMap[dayKey].min,item.main.temp_min);
+    dailyMap[dayKey].codes.push(owmCodeToWmo(item.weather[0].id));
+    dailyMap[dayKey].probs.push(Math.round((item.pop||0)*100));
+  });
+  const dailyTimes=Object.keys(dailyMap).slice(0,7);
+  return {
+    source:'owm',
+    hourly:{time:times,temperature_2m:temps,precipitation_probability:probs,weathercode:codes,relativehumidity_2m:humids,windspeed_10m:winds,is_day:isdays},
+    daily:{time:dailyTimes,temperature_2m_max:dailyTimes.map(k=>dailyMap[k].max),temperature_2m_min:dailyTimes.map(k=>dailyMap[k].min),weathercode:dailyTimes.map(k=>mode(dailyMap[k].codes)),precipitation_probability_max:dailyTimes.map(k=>Math.max(...dailyMap[k].probs)),sunrise:dailyTimes.map(()=>null),sunset:dailyTimes.map(()=>null)},
+    current_weather:{temperature:cur.main.temp,weathercode:owmCodeToWmo(cur.weather[0].id),windspeed:cur.wind.speed*3.6},
+  };
+}
+
+function mode(arr){const c={};arr.forEach(v=>c[v]=(c[v]||0)+1);return +Object.keys(c).reduce((a,b)=>c[a]>c[b]?a:b);}
+
+// ── ENSEMBLE FETCH ─────────────────────────────────────────────────────
+// Chiama l'API ensemble di Open-Meteo (ECMWF ENS 51 membri + ICON EPS)
+// Calcola per ogni ora: mediana (p50), p10, p90, prob pioggia reale
+async function fetchEnsemble(lat, lon) {
+  // Richiediamo temperature e precip per tutti i membri disponibili
+  const url = `https://ensemble-api.open-meteo.com/v1/ensemble`
+    + `?latitude=${lat}&longitude=${lon}`
+    + `&hourly=temperature_2m,precipitation`
+    + `&models=ecmwf_ifs04`   // 51 membri ECMWF, risoluzione 0.4°
+    + `&forecast_days=7&timezone=Europe%2FRome`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('ENS ' + r.status);
+  const d = await r.json();
+  return normalizeEnsemble(d);
+}
+
+function normalizeEnsemble(d) {
+  const h = d.hourly;
+  const times = h.time;
+
+  // Trova tutte le chiavi temperature_2m_memberXX e precipitation_memberXX
+  const tempKeys  = Object.keys(h).filter(k => k.startsWith('temperature_2m_member'));
+  const precipKeys= Object.keys(h).filter(k => k.startsWith('precipitation_member'));
+  const nMembers  = tempKeys.length;
+
+  // Per ogni slot orario calcola percentili sui membri
+  const pMedian=[], p10=[], p90=[], precipProb=[], spreads=[];
+  const dailyMap={};
+
+  times.forEach((t, i) => {
+    // Raccogli valori dei membri per questo slot
+    const tVals = tempKeys.map(k => h[k][i]).filter(v => v != null && !isNaN(v));
+    const pVals = precipKeys.map(k => h[k][i]).filter(v => v != null && !isNaN(v));
+
+    tVals.sort((a,b)=>a-b);
+    const n = tVals.length;
+    const median = n ? (n%2===0 ? (tVals[n/2-1]+tVals[n/2])/2 : tVals[Math.floor(n/2)]) : null;
+    const q10    = n ? tVals[Math.max(0,Math.floor(n*0.1))] : null;
+    const q90    = n ? tVals[Math.min(n-1,Math.floor(n*0.9))] : null;
+    const sp     = (q10!=null&&q90!=null) ? q90-q10 : 0;
+
+    // Probabilità pioggia = % membri con precipitazione > 0.1 mm
+    const rainCount = pVals.filter(v=>v>0.1).length;
+    const rainProb  = pVals.length ? Math.round(rainCount/pVals.length*100) : 0;
+
+    pMedian.push(median);
+    p10.push(q10);
+    p90.push(q90);
+    precipProb.push(rainProb);
+    spreads.push(sp);
+
+    // Accumula per daily
+    const dayKey = t.slice(0,10);
+    if (!dailyMap[dayKey]) dailyMap[dayKey] = {maxes:[], mines:[], probs:[]};
+    if (median!=null) {
+      dailyMap[dayKey].maxes.push(median);
+      dailyMap[dayKey].mines.push(median);
+    }
+    dailyMap[dayKey].probs.push(rainProb);
+  });
+
+  const is_day = times.map(t=>{ const h=parseInt(t.slice(11,13)); return h>=6&&h<20?1:0; });
+  const weathercode = precipProb.map((prob,i)=>{
+    if (prob>=60) return 61;
+    if (prob>=30) return 80;
+    return 0;
+  });
+
+  const dayKeys = Object.keys(dailyMap).sort().slice(0,7);
+  return {
+    source: 'ensemble',
+    hourly: {
+      time: times,
+      temperature_2m: pMedian,
+      precipitation_probability: precipProb,
+      weathercode,
+      relativehumidity_2m: times.map(()=>null),
+      windspeed_10m: times.map(()=>null),
+      is_day,
+    },
+    daily: {
+      time: dayKeys,
+      temperature_2m_max: dayKeys.map(k=>{ const a=dailyMap[k].maxes; return a.length?Math.max(...a):null; }),
+      temperature_2m_min: dayKeys.map(k=>{ const a=dailyMap[k].mines; return a.length?Math.min(...a):null; }),
+      weathercode: dayKeys.map(k=>{ const p=Math.max(...dailyMap[k].probs); return p>=60?61:p>=30?80:0; }),
+      precipitation_probability_max: dayKeys.map(k=>Math.max(...dailyMap[k].probs)),
+      sunrise: dayKeys.map(()=>null),
+      sunset:  dayKeys.map(()=>null),
+    },
+    current_weather: null,
+    // dati extra per la banda di incertezza
+    ensemble_extra: { times, p10, p90, spreads, precipProb, nMembers },
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// WEIGHTED MERGE
+// ═══════════════════════════════════════════════════════
+function merge(results) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+  const nowH = now.getHours();
+
+  // Build hourly map: timestamp → [{val, weight}]
+  const hourlyMaps = {temp:{}, prob:{}, code:{}, humid:{}, wind:{}, isday:{}};
+  const dailyMaps  = {max:{}, min:{}, code:{}, prob:{}};
+
+  let sunrise=null, sunset=null, currentWeather=null, totalWeight=0;
+
+  results.forEach(({data, src}) => {
+    if (!data) return;
+    const w = src.weight;
+    totalWeight += w;
+
+    // hourly
+    (data.hourly.time||[]).forEach((t,i)=>{
+      const key=t.slice(0,13);
+      const push=(m,v)=>{if(v!=null&&!isNaN(v)){if(!m[key])m[key]=[];m[key].push({v,w});}};
+      push(hourlyMaps.temp, data.hourly.temperature_2m?.[i]);
+      push(hourlyMaps.prob, data.hourly.precipitation_probability?.[i]);
+      push(hourlyMaps.code, data.hourly.weathercode?.[i]);
+      push(hourlyMaps.humid,data.hourly.relativehumidity_2m?.[i]);
+      push(hourlyMaps.wind, data.hourly.windspeed_10m?.[i]);
+      push(hourlyMaps.isday,data.hourly.is_day?.[i]);
+    });
+
+    // daily
+    (data.daily.time||[]).forEach((t,i)=>{
+      const key=t.slice(0,10);
+      const push=(m,v)=>{if(v!=null&&!isNaN(v)){if(!m[key])m[key]=[];m[key].push({v,w});}};
+      push(dailyMaps.max,data.daily.temperature_2m_max?.[i]);
+      push(dailyMaps.min,data.daily.temperature_2m_min?.[i]);
+      push(dailyMaps.code,data.daily.weathercode?.[i]);
+      push(dailyMaps.prob,data.daily.precipitation_probability_max?.[i]);
+      if (data.daily.sunrise?.[i] && !sunrise) sunrise=data.daily.sunrise[i].slice(11,16);
+      if (data.daily.sunset?.[i]  && !sunset)  sunset =data.daily.sunset[i].slice(11,16);
+    });
+
+    if (data.current_weather && !currentWeather) currentWeather = data.current_weather;
+  });
+
+  function wavg(arr){
+    if(!arr||!arr.length) return null;
+    const sw=arr.reduce((a,x)=>a+x.w,0);
+    return arr.reduce((a,x)=>a+x.v*x.w,0)/sw;
+  }
+  function wmode(arr){
+    if(!arr||!arr.length) return null;
+    const c={};arr.forEach(x=>c[x.v]=(c[x.v]||0)+x.w);
+    return +Object.keys(c).reduce((a,b)=>c[a]>c[b]?a:b);
+  }
+  function spread(arr){
+    if(!arr||arr.length<2) return 0;
+    const vals=arr.map(x=>x.v);
+    return Math.max(...vals)-Math.min(...vals);
+  }
+
+  // Sort hour keys
+  const hourKeys = Object.keys(hourlyMaps.temp).sort();
+  const hourly = {
+    time: hourKeys.map(k=>k+':00'),
+    temperature_2m: hourKeys.map(k=>wavg(hourlyMaps.temp[k])),
+    temperature_spread: hourKeys.map(k=>spread(hourlyMaps.temp[k])),
+    precipitation_probability: hourKeys.map(k=>wavg(hourlyMaps.prob[k])),
+    weathercode: hourKeys.map(k=>wmode(hourlyMaps.code[k])),
+    relativehumidity_2m: hourKeys.map(k=>wavg(hourlyMaps.humid[k])),
+    windspeed_10m: hourKeys.map(k=>wavg(hourlyMaps.wind[k])),
+    is_day: hourKeys.map(k=>Math.round(wavg(hourlyMaps.isday[k])||0)),
+    sourceCount: hourKeys.map(k=>(hourlyMaps.temp[k]||[]).length),
+  };
+
+  const dayKeys = Object.keys(dailyMaps.max).sort().slice(0,7);
+  const daily = {
+    time: dayKeys,
+    temperature_2m_max: dayKeys.map(k=>wavg(dailyMaps.max[k])),
+    temperature_2m_min: dayKeys.map(k=>wavg(dailyMaps.min[k])),
+    temperature_max_spread: dayKeys.map(k=>spread(dailyMaps.max[k])),
+    weathercode: dayKeys.map(k=>wmode(dailyMaps.code[k])),
+    precipitation_probability_max: dayKeys.map(k=>wavg(dailyMaps.prob[k])),
+    sunrise, sunset,
+  };
+
+  // Current weather: weighted avg temp from first hour
+  const nowKey = now.toISOString().slice(0,13);
+  const curTemp = wavg(hourlyMaps.temp[nowKey]) ?? currentWeather?.temperature ?? null;
+  const curCode = wmode(hourlyMaps.code[nowKey]) ?? currentWeather?.weathercode ?? 0;
+  const curWind = wavg(hourlyMaps.wind[nowKey]) ?? currentWeather?.windspeed ?? 0;
+  const curHumid= wavg(hourlyMaps.humid[nowKey])??null;
+  const curProb = wavg(hourlyMaps.prob[nowKey])??0;
+  const curIsDay= Math.round(wavg(hourlyMaps.isday[nowKey]??[{v:nowH>=6&&nowH<20?1:0,w:1}]));
+
+  // Confidence: based on spread of temperature and number of sources
+  const avgSpread = dayKeys.slice(0,3).reduce((a,k)=>{
+    const sp=spread(dailyMaps.max[k]||[]);return a+sp;},0)/3;
+  const srcCount = results.filter(x=>x.data).length;
+  const confRaw = Math.max(0, Math.min(100, 100 - avgSpread*8 + srcCount*5));
+  const confidence = Math.round(confRaw);
+
+  // ── ENSEMBLE BAND: p10/p90 reali dai 51 membri ──────────────────────
+  // Cerca il risultato ensemble tra i dati disponibili
+  const ensResult = results.find(r => r.src.id === 'ensemble' && r.data?.ensemble_extra);
+  let ensembleBand = null;
+  if (ensResult) {
+    const ex = ensResult.data.ensemble_extra;
+    // Costruisci mappa ora→{p10,p90,prob} indicizzata per slot orario
+    const bandMap = {};
+    ex.times.forEach((t,i)=>{
+      bandMap[t.slice(0,13)] = {
+        p10:  ex.p10[i],
+        p90:  ex.p90[i],
+        prob: ex.precipProb[i],
+        spread: ex.spreads[i],
+      };
+    });
+    ensembleBand = { bandMap, nMembers: ex.nMembers };
+
+    // Aggiorna precipitation_probability nelle hourly con quella ensemble
+    // (più accurata di quella interpolata dai modelli deterministici)
+    hourly.time.forEach((t,i) => {
+      const key = t.slice(0,13);
+      if (bandMap[key]?.prob != null) {
+        hourly.precipitation_probability[i] = bandMap[key].prob;
+      }
+      // Sostituisce anche temperature_spread con banda p10-p90 reale
+      if (bandMap[key]?.spread != null) {
+        hourly.temperature_spread[i] = bandMap[key].spread;
+      }
+    });
+  }
+
+  return {hourly, daily, curTemp, curCode, curWind, curHumid, curProb, curIsDay, confidence, srcCount, sunrise, sunset, ensembleBand};
+}
+
+// ═══════════════════════════════════════════════════════
+// LOAD ORCHESTRATOR
+// ═══════════════════════════════════════════════════════
+let statusMap = {};
+
+async function loadAll(city) {
+  setLoading();
+  statusMap = {};
+  SOURCES.forEach(src => { statusMap[src.id] = 'loading'; });
+  renderSourceBadges();
+
+  const promises = SOURCES.map(async src => {
+    try {
+      let data;
+      if (src.type === 'owm') {
+        if (!S.owmKey) { statusMap[src.id]='skip'; return {src, data:null}; }
+        data = await fetchOWM(city.lat, city.lon, S.owmKey);
+      } else if (src.type === 'ensemble') {
+        data = await fetchEnsemble(city.lat, city.lon);
+      } else {
+        data = await fetchOpenMeteo(src, city.lat, city.lon);
+      }
+      statusMap[src.id] = 'ok';
+      return {src, data};
+    } catch(e) {
+      statusMap[src.id] = 'err';
+      return {src, data:null};
+    }
+  });
+
+  // Render progressively as each source resolves
+  const resultsArr = [];
+  await Promise.all(promises.map(p => p.then(res => {
+    resultsArr.push(res);
+    renderSourceBadges();
+    if (resultsArr.filter(x=>x.data).length >= 2) {
+      const merged = merge(resultsArr);
+      S.merged = {merged, resultsArr};
+      renderToday(merged, city);
+      renderWeek(merged, city);
+      renderModels(resultsArr, city);
+    }
+  })));
+
+  // Final render with all data
+  const merged = merge(resultsArr);
+  S.merged = {merged, resultsArr};
+  renderSourceBadges();
+  renderToday(merged, city);
+  renderWeek(merged, city);
+  renderModels(resultsArr, city);
+}
+
+function setLoading() {
+  document.getElementById('main-content').innerHTML = '<div class="state-box"><div class="spinner"></div><span class="load-msg">Interrogo 7 fonti meteorologiche…</span><span style="font-size:11px;color:var(--text-sub);margin-top:4px">ECMWF · DWD · Météo-France · GFS · ItaliaMeteo · Best Match · Ensemble 51</span></div>';
+  document.getElementById('weekly-content').innerHTML = '<div class="state-box"><div class="spinner"></div></div>';
+  document.getElementById('models-content').innerHTML = '<div class="state-box"><div class="spinner"></div></div>';
+}
+
+function renderSourceBadges() {
+  const existing = document.getElementById('sources-bar');
+  if (!existing) return;
+  existing.innerHTML = SOURCES.map(src => {
+    const st = statusMap[src.id];
+    if (st === 'skip') return '';
+    const cls = st==='ok'?'ok':st==='err'?'err':'loading';
+    return `<span class="src-badge ${cls}"><span class="src-dot"></span>${src.label}</span>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER TODAY
+// ═══════════════════════════════════════════════════════
+function renderToday(m, city) {
+  const {hourly, daily, curTemp, curCode, curWind, curHumid, curProb, curIsDay, confidence, srcCount, sunrise, sunset, ensembleBand} = m;
+  const now = new Date();
+  const nowH = now.getHours();
+
+  const maxT = daily.temperature_2m_max[0];
+  const minT = daily.temperature_2m_min[0];
+
+  let allerta = '';
+  if (curTemp >= 35) allerta = `<div class="allerta-bar">⚠️ Allerta caldo: ${dispNum(curTemp)}°C — Evitare esposizione solare nelle ore centrali.</div>`;
+
+  // Hourly strip
+  const todayIdx = hourly.time.map((t,i)=>({t,i})).filter(x=>x.t.startsWith(now.toISOString().slice(0,10)));
+  const startI = todayIdx.find(x=>parseInt(x.t.slice(11,13))===nowH)?.i ?? todayIdx[0]?.i ?? 0;
+  let strip = '';
+  for (let k=startI; k<Math.min(startI+24, hourly.time.length); k++) {
+    const h = parseInt(hourly.time[k].slice(11,13));
+    const t = hourly.temperature_2m[k];
+    const sp = hourly.temperature_spread[k];
+    const rain = Math.round(hourly.precipitation_probability[k]||0);
+    const code = hourly.weathercode[k];
+    const isD = hourly.is_day[k];
+    const isNow = k===startI;
+    // Banda ensemble p10-p90 per questo slot
+    const timeKey = hourly.time[k].slice(0,13);
+    const band = m.ensembleBand?.bandMap?.[timeKey];
+    const p10str = band?.p10 != null ? disp(band.p10) : null;
+    const p90str = band?.p90 != null ? disp(band.p90) : null;
+    const bandStr = (p10str && p90str) ? `<div class="h-spread" title="Banda ensemble p10–p90">${p10str}–${p90str}</div>` :
+                    sp>1 ? `<div class="h-spread">±${Math.round(sp/2)}°</div>` : '';
+    strip += `<div class="hour-card ${isNow?'now':''}">
+      <div class="h-time">${isNow?'ora':h+':00'}</div>
+      <div class="h-icon">${wIcon(code,isD)}</div>
+      <div class="h-temp ${tClass(t)}">${disp(t)}</div>
+      ${rain>5?`<div class="h-rain">💧${rain}%</div>`:''}
+      ${bandStr}
+    </div>`;
+  }
+
+  // Confidence color
+  const confColor = confidence>=80?'#86efac':confidence>=60?'#fcd34d':'#fca5a5';
+  const confLabel = confidence>=80?'Alta':'Medio-Alta';
+
+  const d = now;
+  const dateStr = `${DAYS_LONG[d.getDay()]} ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
+
+  document.getElementById('main-content').innerHTML = `
+    ${allerta}
+    <div id="sources-bar" class="sources-bar"></div>
+    <div class="hero">
+      <div class="hero-city">📍 <span>${city.name}</span></div>
+      <div class="hero-temp">${dispNum(curTemp??0)}<sup>${S.unit==='celsius'?'°C':'°F'}</sup></div>
+      <div class="hero-cond">${wLabel(curCode)}</div>
+      <div class="hero-icon">${wIcon(curCode,curIsDay)}</div>
+      <div class="hero-meta">
+        <div class="hero-meta-item"><span class="hero-meta-label">Max</span><span class="hero-meta-value ${tClass(maxT)}">${disp(maxT)}</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Min</span><span class="hero-meta-value">${disp(minT)}</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Umidità</span><span class="hero-meta-value">${Math.round(curHumid??0)}%</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Vento</span><span class="hero-meta-value">${Math.round(curWind??0)} km/h</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Pioggia</span><span class="hero-meta-value" style="color:#60a5fa">${Math.round(curProb)}%</span></div>
+        ${sunrise?`<div class="hero-meta-item"><span class="hero-meta-label">Alba/Tramonto</span><span class="hero-meta-value">${sunrise} / ${sunset}</span></div>`:''}
+      </div>
+    </div>
+
+    <div class="confidence-wrap">
+      <div class="conf-label">Attendibilità previsione (${srcCount} fonti aggregate)</div>
+      <div class="conf-bar-wrap">
+        <div class="conf-track"><div class="conf-fill" style="width:${confidence}%;background:${confColor}"></div></div>
+        <span class="conf-pct" style="color:${confColor}">${confidence}%</span>
+      </div>
+      <div class="conf-detail">${confLabel} — scarto medio modelli: ±${Math.round((100-confidence)/10*1.5)}°C${ensembleBand?' · banda ensemble attiva':''}</div>
+    </div>
+
+    <p class="section-title">Prossime 24 ore</p>
+    <div class="hourly-scroll"><div class="hourly-strip">${strip}</div></div>
+
+    <p class="section-title" style="margin-top:16px">${dateStr}</p>
+  `;
+  renderSourceBadges();
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER WEEK
+// ═══════════════════════════════════════════════════════
+function renderWeek(m, city) {
+  let rows = '';
+  m.daily.time.forEach((dateStr,i)=>{
+    const d = new Date(dateStr+'T12:00:00');
+    const label = i===0?'Oggi':i===1?'Domani':DAYS_LONG[d.getDay()];
+    const maxT = m.daily.temperature_2m_max[i];
+    const minT = m.daily.temperature_2m_min[i];
+    const code = m.daily.weathercode[i];
+    const rain = Math.round(m.daily.precipitation_probability_max[i]||0);
+    const sp   = Math.round(m.daily.temperature_max_spread[i]||0);
+    rows += `<div class="day-row">
+      <span class="day-name">${label}<br><span style="font-size:11px;color:var(--text-sub)">${d.getDate()} ${MESI[d.getMonth()]}${sp>2?` <span style="color:var(--gold-lt);font-size:10px">±${Math.round(sp/2)}°</span>`:''}</span></span>
+      <span class="day-icon">${wIcon(code,1)}</span>
+      <span class="day-rain">${rain>5?'💧'+rain+'%':''}</span>
+      <span class="day-range"><span class="mn">${disp(minT)} </span><span class="mx ${tClass(maxT)}">${disp(maxT)}</span></span>
+    </div>`;
+  });
+  document.getElementById('weekly-content').innerHTML = `
+    <div style="margin:8px 14px 14px">
+      <p class="section-title" style="margin:0 0 10px">7 giorni — ${city.name}</p>
+      <div class="daily-list">${rows}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// ENSEMBLE SECTION BUILDER
+// ═══════════════════════════════════════════════════════
+function buildEnsembleSection(resultsArr) {
+  const ensRes = resultsArr.find(r => r.src.id === 'ensemble' && r.data?.ensemble_extra);
+  if (!ensRes) return '';
+  const ex = ensRes.data.ensemble_extra;
+  const now = new Date();
+  const nowH = now.getHours();
+
+  // Prossime 8 ore
+  const rows = [];
+  for (let h = nowH; h < nowH + 8; h++) {
+    const t = new Date(now); t.setHours(h, 0, 0, 0);
+    const key = t.toISOString().slice(0, 13);
+    const i = ex.times.indexOf(key + ':00');
+    if (i < 0) continue;
+    const median = ensRes.data.hourly.temperature_2m[i];
+    const q10 = ex.p10[i], q90 = ex.p90[i];
+    const prob = ex.precipProb[i];
+    const spread = ex.spreads[i];
+    if (median == null) continue;
+
+    // Barra visuale p10–p90 (range 15–45°C → 0–100%)
+    const scale = v => Math.round(Math.max(0, Math.min(100, (v - 10) / 40 * 100)));
+    const leftPct  = scale(q10);
+    const widthPct = Math.max(1, scale(q90) - scale(q10));
+    const midPct   = scale(median);
+
+    rows.push(`
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--card-border)">
+        <span style="font-size:11px;color:var(--text-sub);min-width:38px">${h%24}:00</span>
+        <div style="flex:1;position:relative;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;overflow:visible">
+          <div style="position:absolute;left:${leftPct}%;width:${widthPct}%;height:100%;background:rgba(99,179,237,0.35);border-radius:7px"></div>
+          <div style="position:absolute;left:calc(${midPct}% - 4px);top:-1px;width:8px;height:16px;background:var(--gold);border-radius:4px"></div>
+        </div>
+        <span style="font-size:11px;min-width:70px;color:var(--text-sub)">${disp(q10)} – ${disp(q90)}</span>
+        <span style="font-size:12px;font-weight:600;min-width:34px;text-align:right" class="${tClass(median)}">${disp(median)}</span>
+        ${prob>5?`<span style="font-size:10px;color:#60a5fa;min-width:30px">💧${prob}%</span>`:'<span style="min-width:30px"></span>'}
+      </div>`);
+  }
+
+  return `
+    <p class="section-title" style="margin:14px 0 6px">🎲 Ensemble 51 membri — banda di confidenza (p10–p90)</p>
+    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:10px 13px;margin:0 0 8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:24px;height:8px;background:rgba(99,179,237,0.35);border-radius:4px"></div>
+        <span style="font-size:10px;color:var(--text-sub)">Banda p10–p90 (80% dei ${ex.nMembers} scenari)</span>
+        <div style="width:8px;height:12px;background:var(--gold);border-radius:3px;margin-left:8px"></div>
+        <span style="font-size:10px;color:var(--text-sub)">Mediana (p50)</span>
+      </div>
+      ${rows.join('')}
+      <p style="font-size:10px;color:var(--text-sub);margin-top:8px">La banda blu contiene l'80% degli scenari simulati. Banda stretta = alta certezza. Banda larga = situazione incerta.</p>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER MODELS TAB
+// ═══════════════════════════════════════════════════════
+function renderModels(resultsArr, city) {
+  const now = new Date();
+  const nowKey = now.toISOString().slice(0,13);
+  const todayStr = now.toISOString().slice(0,10);
+
+  // Get today's max for each source
+  const srcRows = resultsArr.map(({src, data}) => {
+    if (!data) return {src, curT:null, maxT:null, minT:null};
+    const hi = data.hourly.time.indexOf(nowKey+':00');
+    const curT = hi>=0 ? data.hourly.temperature_2m[hi] : data.current_weather?.temperature ?? null;
+    const di = data.daily.time.indexOf(todayStr);
+    const maxT = di>=0 ? data.daily.temperature_2m_max[di] : null;
+    const minT = di>=0 ? data.daily.temperature_2m_min[di] : null;
+    return {src, curT, maxT, minT};
+  }).filter(x=>x.maxT!=null);
+
+  const avgMax = srcRows.reduce((a,x)=>a+x.maxT,0)/srcRows.length;
+  const avgMin = srcRows.reduce((a,x)=>a+x.minT,0)/srcRows.length;
+
+  const cards = srcRows.map(({src, curT, maxT, minT})=>{
+    const diff = maxT - avgMax;
+    const diffStr = diff>0.4?`+${diff.toFixed(1)}°`:diff<-0.4?`${diff.toFixed(1)}°`:'≈ media';
+    const diffCls = diff>0.4?'plus':diff<-0.4?'minus':'zero';
+    return `<div class="model-card">
+      <div class="model-name">${src.flag} ${src.label}</div>
+      <div class="model-temp ${tClass(maxT)}">${disp(maxT)}</div>
+      <div class="model-diff ${diffCls}">${diffStr}</div>
+      <div style="font-size:10px;color:var(--text-sub);margin-top:2px">min ${disp(minT)}</div>
+    </div>`;
+  }).join('');
+
+  // Hourly comparison for next 12h
+  const hours=[];
+  for(let h=now.getHours();h<now.getHours()+12;h++){
+    const t=new Date(now);t.setHours(h,0,0,0);
+    const key=t.toISOString().slice(0,13);
+    const label=h%24+':00';
+    const vals=resultsArr.map(({src,data})=>{
+      if(!data) return null;
+      const i=data.hourly.time.indexOf(key+':00');
+      if(i<0) return null;
+      return {v:data.hourly.temperature_2m[i],label:src.label,flag:src.flag};
+    }).filter(Boolean);
+    if(vals.length) hours.push({label,vals,avg:vals.reduce((a,x)=>a+x.v,0)/vals.length});
+  }
+
+  const hTable = hours.map(h=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--card-border)">
+      <span style="font-size:12px;color:var(--text-sub);min-width:40px">${h.label}</span>
+      <span style="font-size:13px;font-weight:600;min-width:48px;${''}" class="${tClass(h.avg)}">${disp(h.avg)}</span>
+      <span style="font-size:10px;color:var(--text-sub)">${h.vals.map(v=>`${v.flag}${Math.round(v.v)}°`).join(' ')}</span>
+    </div>`).join('');
+
+  document.getElementById('models-content').innerHTML = `
+    <div style="margin:8px 14px">
+      <p class="section-title" style="margin:0 0 10px">Confronto modelli — massima oggi</p>
+      <div class="model-grid">${cards}</div>
+      <p style="font-size:11px;color:var(--text-sub);margin:4px 0 14px">Media: max ${disp(avgMax)} / min ${disp(avgMin)}</p>
+
+      <p class="section-title" style="margin:0 0 6px">Temperatura oraria — confronto</p>
+      <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:10px 13px">
+        ${hTable}
+      </div>
+
+      ${buildEnsembleSection(resultsArr)}
+
+      <p style="font-size:11px;color:var(--text-sub);margin-top:14px;line-height:1.6">
+        <strong style="color:var(--text)">Fonti:</strong><br>
+        🎲 Ensemble 51 — ECMWF ENS 51 membri: mediana statistica (p50) usata come previsione, p10–p90 come banda di confidenza reale<br>
+        🇪🇺 ECMWF IFS — Centro europeo per le previsioni a medio termine (Reading, UK)<br>
+        🇩🇪 DWD ICON-EU — Servizio meteo tedesco, alta risoluzione sull'Europa<br>
+        🇫🇷 Météo-France AROME — Modello ad alta risoluzione per l'Europa<br>
+        🇺🇸 NOAA GFS — Servizio oceanico e atmosferico degli USA<br>
+        🇮🇹 ItaliaMeteo ARPAE — Agenzia italiana per l'ambiente e il clima<br>
+        🌐 Best Match — Selezione automatica del modello migliore per la posizione<br>
+        ${S.owmKey?'🗺️ OpenWeatherMap — Database globale con stazioni fisiche<br>':''}
+        <br>Tutti i dati passano per <a href="https://open-meteo.com" style="color:var(--gold-lt)" target="_blank">Open-Meteo</a> (CC BY 4.0).
+      </p>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════════════════
+document.querySelectorAll('.nav-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// DRAWER
+// ═══════════════════════════════════════════════════════
+function openDrawer(){document.getElementById('overlay').classList.add('open');document.getElementById('drawer').classList.add('open');renderSavedCities();}
+function closeDrawer(){document.getElementById('overlay').classList.remove('open');document.getElementById('drawer').classList.remove('open');}
+document.getElementById('btn-open-settings').addEventListener('click',openDrawer);
+document.getElementById('overlay').addEventListener('click',closeDrawer);
+
+document.getElementById('unit-select').value = S.unit;
+document.getElementById('unit-select').addEventListener('change',e=>{
+  S.unit=e.target.value; persist();
+  if(S.merged){renderToday(S.merged.merged,S.defaultCity);renderWeek(S.merged.merged,S.defaultCity);renderModels(S.merged.resultsArr,S.defaultCity);}
+});
+
+document.getElementById('owm-key').value = S.owmKey;
+document.getElementById('btn-save-key').addEventListener('click',()=>{
+  S.owmKey=document.getElementById('owm-key').value.trim(); persist();
+  loadAll(S.defaultCity);
+  closeDrawer();
+});
+
+// City search
+document.getElementById('btn-city-search').addEventListener('click',doSearch);
+document.getElementById('city-search-input').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+
+async function doSearch(){
+  const q=document.getElementById('city-search-input').value.trim();
+  if(!q) return;
+  const el=document.getElementById('search-results');
+  el.innerHTML='<div style="color:var(--text-sub);font-size:13px;padding:8px 0">Ricerca…</div>';
+  try{
+    const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=it`);
+    const d=await r.json();
+    const results=d.results||[];
+    if(!results.length){el.innerHTML='<div style="color:var(--text-sub);font-size:13px;padding:8px 0">Nessun risultato.</div>';return;}
+    el.innerHTML=results.map((r,i)=>`
+      <div class="result-item" data-i="${i}">
+        <div class="r-name">${r.name}</div>
+        <div class="r-sub">${r.admin1||''} ${r.country_code?'· '+r.country_code:''}</div>
+      </div>`).join('');
+    el.querySelectorAll('.result-item').forEach((item,i)=>{
+      item.addEventListener('click',()=>{
+        const r=results[i];
+        const city={name:r.name,lat:r.latitude,lon:r.longitude,country:r.country_code};
+        if(!S.cities.find(c=>c.lat===city.lat&&c.lon===city.lon)) S.cities.push(city);
+        S.defaultCity=city; persist();
+        el.innerHTML=''; document.getElementById('city-search-input').value='';
+        renderSavedCities(); closeDrawer(); loadAll(city);
+      });
+    });
+  }catch(e){el.innerHTML='<div style="color:var(--hot);font-size:13px;padding:8px 0">Errore di rete.</div>';}
+}
+
+function renderSavedCities(){
+  const el=document.getElementById('saved-list');
+  if(!S.cities.length){el.innerHTML='<div style="color:var(--text-sub);font-size:13px">Nessuna città salvata.</div>';return;}
+  el.innerHTML=S.cities.map((c,i)=>{
+    const isDef=S.defaultCity&&c.lat===S.defaultCity.lat&&c.lon===S.defaultCity.lon;
+    return `<div class="saved-item ${isDef?'active-city':''}">
+      <span class="saved-item-name" data-i="${i}">${c.name} ${isDef?'⭐':''}</span>
+      <button class="btn-set-default ${isDef?'is-default':''}" data-i="${i}">${isDef?'Default':'Imposta'}</button>
+      <button class="btn-del" data-i="${i}">🗑</button>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.saved-item-name').forEach(b=>b.addEventListener('click',()=>{S.defaultCity=S.cities[+b.dataset.i];persist();closeDrawer();loadAll(S.defaultCity);}));
+  el.querySelectorAll('.btn-set-default').forEach(b=>b.addEventListener('click',()=>{S.defaultCity=S.cities[+b.dataset.i];persist();renderSavedCities();loadAll(S.defaultCity);}));
+  el.querySelectorAll('.btn-del').forEach(b=>b.addEventListener('click',()=>{
+    S.cities.splice(+b.dataset.i,1);
+    if(S.cities.length&&S.defaultCity&&!S.cities.find(c=>c.lat===S.defaultCity.lat)) S.defaultCity=S.cities[0];
+    persist();renderSavedCities();
+  }));
+}
+
+// ═══════════════════════════════════════════════════════
+// PWA INSTALL
+// ═══════════════════════════════════════════════════════
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();deferredPrompt=e;
+  document.getElementById('install-banner').style.display='flex';
+});
+document.getElementById('btn-install').addEventListener('click',async()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt=null;
+  document.getElementById('install-banner').style.display='none';
+});
+document.getElementById('btn-dismiss-install').addEventListener('click',()=>{
+  document.getElementById('install-banner').style.display='none';
+});
+
+// ═══════════════════════════════════════════════════════
+// SERVICE WORKER
+// ═══════════════════════════════════════════════════════
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+}
+
+// ═══════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════
+loadAll(S.defaultCity);
+</script>
+</body>
+</html>
