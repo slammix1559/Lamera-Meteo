@@ -1,37 +1,58 @@
-const CACHE = 'meteo-italia-v1';
-const STATIC = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'meteo-lamera-v2';
+
+// Determina il base path dinamicamente dalla location del SW
+// Su GitHub Pages sarà /Lamera-Meteo/, in locale sarà /
+const BASE = self.location.pathname.replace('/sw.js', '');
+
+const STATIC = [
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/manifest.json',
+  BASE + '/icons/icon-192.png',
+  BASE + '/icons/icon-512.png',
+];
 
 // Install: cache static assets
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(c => c.addAll(STATIC))
+      .then(() => self.skipWaiting())
   );
 });
 
 // Activate: clean old caches
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // API calls → network first, no cache
-  if (url.hostname.includes('open-meteo.com') || url.hostname.includes('geocoding-api')) {
+  // API meteo → network first, niente cache
+  if (
+    url.hostname.includes('open-meteo.com') ||
+    url.hostname.includes('geocoding-api') ||
+    url.hostname.includes('openweathermap.org')
+  ) {
     e.respondWith(
       fetch(e.request).catch(() =>
-        new Response(JSON.stringify({ error: 'offline' }), { headers: { 'Content-Type': 'application/json' } })
+        new Response(JSON.stringify({ error: 'offline' }), {
+          headers: { 'Content-Type': 'application/json' }
+        })
       )
     );
     return;
   }
 
-  // Static assets → cache first
+  // Asset statici → cache first, poi rete
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
