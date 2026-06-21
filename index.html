@@ -163,8 +163,8 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 .day-row .chevron{font-size:12px;color:var(--text-sub);margin-left:4px;transition:transform .2s}
 .day-row.selected .chevron{transform:rotate(90deg);color:var(--gold)}
 .day-detail{background:rgba(0,0,0,0.2);border:1px solid var(--card-border);border-radius:var(--radius-sm);margin-top:4px;overflow:hidden;max-height:0;transition:max-height .35s ease}
-.day-detail.open{max-height:800px}
-.day-detail-inner{padding:10px 12px}
+.day-detail.open{max-height:2000px}
+.day-detail-inner{padding:10px 12px 16px}
 .dh-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,0.06)}
 .dh-row:last-child{border-bottom:none}
 .dh-time{font-size:12px;color:var(--text-sub);min-width:42px}
@@ -877,7 +877,7 @@ function renderWeek(m, city) {
   });
 
   document.getElementById('weekly-content').innerHTML = `
-    <div style="margin:8px 14px 14px">
+    <div style="margin:8px 14px 100px">
       <p class="section-title" style="margin:0 0 10px">7 giorni — ${city.name}</p>
       <div class="daily-list">${rows}</div>
     </div>`;
