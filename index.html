@@ -1283,8 +1283,14 @@ document.getElementById('btn-dismiss-install').addEventListener('click',()=>{
 // ═══════════════════════════════════════════════════════
 // SERVICE WORKER
 // ═══════════════════════════════════════════════════════
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    // Base path dinamico: funziona su GitHub Pages /Lamera-Meteo/ e in locale /
+    const base = location.pathname.endsWith('/')
+      ? location.pathname
+      : location.pathname.substring(0, location.pathname.lastIndexOf('/') + 1);
+    navigator.serviceWorker.register(base + 'sw.js', { scope: base }).catch(() => {});
+  });
 }
 
 // ═══════════════════════════════════════════════════════
