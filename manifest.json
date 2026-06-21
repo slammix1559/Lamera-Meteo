@@ -1,8 +1,9 @@
 {
   "name": "Meteo Lamera",
   "short_name": "Meteo",
-  "description": "Previsioni meteo orarie per le città italiane",
-  "start_url": "/",
+  "description": "Previsioni meteo aggregate multi-modello",
+  "start_url": "/Lamera-Meteo/",
+  "scope": "/Lamera-Meteo/",
   "display": "standalone",
   "background_color": "#0d1b3e",
   "theme_color": "#1a2744",
