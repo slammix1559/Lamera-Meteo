@@ -274,33 +274,26 @@ function persist() {
 // ═══════════════════════════════════════════════════════
 // All Open-Meteo endpoints: each uses a different NWP model
 // weight = reliability weight for Italy (higher = more trusted)
-const SOURCES = [
+// ═══════════════════════════════════════════════════════
+// SOURCES — tutti i modelli disponibili
+// La funzione getActiveSources(lat,lon) seleziona dinamicamente
+// quali attivare in base alla posizione geografica
+// ═══════════════════════════════════════════════════════
+
+const HP = '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome';
+const HP3 = '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=3&timezone=Europe%2FRome';
+
+const ALL_SOURCES = [
+  // ── GLOBALI — sempre attivi ──────────────────────────
   {
     id: 'ecmwf',
-    label: 'ECMWF IFS',
+    label: 'ECMWF IFS 9km',
     flag: '🇪🇺',
     weight: 5,
     type: 'openmeteo',
+    geo: 'global',
     endpoint: 'https://api.open-meteo.com/v1/ecmwf',
-    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
-  },
-  {
-    id: 'dwd',
-    label: 'DWD ICON-EU',
-    flag: '🇩🇪',
-    weight: 4,
-    type: 'openmeteo',
-    endpoint: 'https://api.open-meteo.com/v1/dwd-icon',
-    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
-  },
-  {
-    id: 'meteofrance',
-    label: 'Météo-France',
-    flag: '🇫🇷',
-    weight: 4,
-    type: 'openmeteo',
-    endpoint: 'https://api.open-meteo.com/v1/meteofrance',
-    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+    params: HP,
   },
   {
     id: 'gfs',
@@ -308,17 +301,9 @@ const SOURCES = [
     flag: '🇺🇸',
     weight: 3,
     type: 'openmeteo',
+    geo: 'global',
     endpoint: 'https://api.open-meteo.com/v1/gfs',
-    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
-  },
-  {
-    id: 'italmeteo',
-    label: 'ItaliaMeteo',
-    flag: '🇮🇹',
-    weight: 5,
-    type: 'openmeteo',
-    endpoint: 'https://api.open-meteo.com/v1/italia-meteo-arpae',
-    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=7&timezone=Europe%2FRome',
+    params: HP,
   },
   {
     id: 'bestmatch',
@@ -326,8 +311,17 @@ const SOURCES = [
     flag: '🌐',
     weight: 4,
     type: 'openmeteo',
+    geo: 'global',
     endpoint: 'https://api.open-meteo.com/v1/forecast',
-    params: '&hourly=temperature_2m,precipitation_probability,weathercode,relativehumidity_2m,windspeed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,sunrise,sunset&current_weather=true&forecast_days=7&timezone=Europe%2FRome',
+    params: HP + ',sunrise,sunset&current_weather=true',
+  },
+  {
+    id: 'ensemble',
+    label: 'Ensemble 51',
+    flag: '🎲',
+    weight: 6,
+    type: 'ensemble',
+    geo: 'global',
   },
   {
     id: 'owm',
@@ -335,16 +329,110 @@ const SOURCES = [
     flag: '🗺️',
     weight: 3,
     type: 'owm',
+    geo: 'global',
     endpoint: 'https://api.openweathermap.org/data/2.5/forecast',
   },
+
+  // ── EUROPA / ITALIA INTERA ───────────────────────────
   {
-    id: 'ensemble',
-    label: 'Ensemble 51',
-    flag: '🎲',
-    weight: 6,   // peso massimo: è il più robusto statisticamente
-    type: 'ensemble',
+    id: 'dwd_eu',
+    label: 'DWD ICON-EU 7km',
+    flag: '🇩🇪',
+    weight: 4,
+    type: 'openmeteo',
+    geo: 'europe',           // lat 36–48, lon 6–19
+    endpoint: 'https://api.open-meteo.com/v1/dwd-icon',
+    params: HP + '&models=icon_eu',
+  },
+  {
+    id: 'meteofrance',
+    label: 'Météo-France AROME',
+    flag: '🇫🇷',
+    weight: 4,
+    type: 'openmeteo',
+    geo: 'europe',
+    endpoint: 'https://api.open-meteo.com/v1/meteofrance',
+    params: HP,
+  },
+  {
+    id: 'knmi',
+    label: 'KNMI Harmonie 2.5km',
+    flag: '🇳🇱',
+    weight: 4,
+    type: 'openmeteo',
+    geo: 'europe',           // copre fino a lat ~44
+    endpoint: 'https://api.open-meteo.com/v1/knmi',
+    params: HP,
+  },
+  {
+    id: 'italmeteo_icon2i',
+    label: 'ARPAE ICON-2I 2km',
+    flag: '🇮🇹',
+    weight: 6,               // modello italiano ufficiale, massimo peso
+    type: 'openmeteo',
+    geo: 'italy',
+    endpoint: 'https://api.open-meteo.com/v1/forecast',
+    params: HP3 + '&models=italia_meteo_arpae_icon_2i',
+  },
+  {
+    id: 'cosmo5m',
+    label: 'COSMO-5M LAMI/AM',
+    flag: '🇮🇹',
+    weight: 5,               // inizializzato con dati AM Italiana + ECMWF
+    type: 'openmeteo',
+    geo: 'italy',
+    endpoint: 'https://api.open-meteo.com/v1/forecast',
+    params: HP3 + '&models=arpae_cosmo_5m',
+  },
+  {
+    id: 'dwd_icon_d2',
+    label: 'DWD ICON-D2 2km',
+    flag: '🇩🇪',
+    weight: 5,
+    type: 'openmeteo',
+    geo: 'north_italy',      // copre Nord Italia e Alpi, lat > 43.5
+    endpoint: 'https://api.open-meteo.com/v1/dwd-icon',
+    params: HP3 + '&models=icon_d2',
+  },
+
+  // ── NORD ITALIA / ALPI ──────────────────────────────
+  {
+    id: 'meteoswiss_ch1',
+    label: 'MeteoSwiss CH1 1km',
+    flag: '🇨🇭',
+    weight: 6,               // massima risoluzione disponibile per la Lombardia
+    type: 'openmeteo',
+    geo: 'north_italy',      // lat > 43.5, lon 6–15
+    endpoint: 'https://api.open-meteo.com/v1/meteoswiss',
+    params: HP3 + '&models=icon_ch1',
+  },
+  {
+    id: 'meteoswiss_ch2',
+    label: 'MeteoSwiss CH2 2km',
+    flag: '🇨🇭',
+    weight: 5,
+    type: 'openmeteo',
+    geo: 'north_italy',
+    endpoint: 'https://api.open-meteo.com/v1/meteoswiss',
+    params: HP + '&models=icon_ch2',
   },
 ];
+
+// Determina geograficamente quali modelli sono attivi per la città
+function getActiveSources(lat, lon) {
+  return ALL_SOURCES.filter(src => {
+    switch(src.geo) {
+      case 'global':      return true;
+      case 'europe':      return lat >= 35 && lat <= 72 && lon >= -10 && lon <= 40;
+      case 'italy':       return lat >= 36 && lat <= 48 && lon >= 6  && lon <= 20;
+      case 'north_italy': return lat >= 43.5 && lat <= 48 && lon >= 6 && lon <= 15;
+      default:            return false;
+    }
+  });
+}
+
+// SOURCES viene popolato dinamicamente in loadAll()
+let SOURCES = ALL_SOURCES;
 
 // ═══════════════════════════════════════════════════════
 // UTILS
@@ -700,7 +788,12 @@ function merge(results) {
 let statusMap = {};
 
 async function loadAll(city) {
-  setLoading();
+  // Seleziona modelli attivi per questa città
+  SOURCES = getActiveSources(city.lat, city.lon);
+  const regionalSrcs = SOURCES.filter(s => s.geo === 'north_italy' || s.geo === 'italy');
+  const srcNames = SOURCES.filter(s=>s.type!=='owm'||S.owmKey).map(s=>s.label).join(' · ');
+
+  setLoading(SOURCES.length, srcNames);
   statusMap = {};
   SOURCES.forEach(src => { statusMap[src.id] = 'loading'; });
   renderSourceBadges();
@@ -747,8 +840,10 @@ async function loadAll(city) {
   renderModels(resultsArr, city);
 }
 
-function setLoading() {
-  document.getElementById('main-content').innerHTML = '<div class="state-box"><div class="spinner"></div><span class="load-msg">Interrogo 7 fonti meteorologiche…</span><span style="font-size:11px;color:var(--text-sub);margin-top:4px">ECMWF · DWD · Météo-France · GFS · ItaliaMeteo · Best Match · Ensemble 51</span></div>';
+function setLoading(n, names) {
+  const count = n || ALL_SOURCES.length;
+  const label = names || 'ECMWF · DWD · Météo-France · GFS · ItaliaMeteo · Best Match · Ensemble 51';
+  document.getElementById('main-content').innerHTML = `<div class="state-box"><div class="spinner"></div><span class="load-msg">Interrogo ${count} fonti meteorologiche…</span><span style="font-size:11px;color:var(--text-sub);margin-top:4px;max-width:320px;line-height:1.5">${label}</span></div>`;
   document.getElementById('weekly-content').innerHTML = '<div class="state-box"><div class="spinner"></div></div>';
   document.getElementById('models-content').innerHTML = '<div class="state-box"><div class="spinner"></div></div>';
 }
@@ -1069,17 +1164,12 @@ function renderModels(resultsArr, city) {
 
       ${buildEnsembleSection(resultsArr)}
 
-      <p style="font-size:11px;color:var(--text-sub);margin-top:14px;line-height:1.6">
-        <strong style="color:var(--text)">Fonti:</strong><br>
-        🎲 Ensemble 51 — ECMWF ENS 51 membri: mediana statistica (p50) usata come previsione, p10–p90 come banda di confidenza reale<br>
-        🇪🇺 ECMWF IFS — Centro europeo per le previsioni a medio termine (Reading, UK)<br>
-        🇩🇪 DWD ICON-EU — Servizio meteo tedesco, alta risoluzione sull'Europa<br>
-        🇫🇷 Météo-France AROME — Modello ad alta risoluzione per l'Europa<br>
-        🇺🇸 NOAA GFS — Servizio oceanico e atmosferico degli USA<br>
-        🇮🇹 ItaliaMeteo ARPAE — Agenzia italiana per l'ambiente e il clima<br>
-        🌐 Best Match — Selezione automatica del modello migliore per la posizione<br>
-        ${S.owmKey?'🗺️ OpenWeatherMap — Database globale con stazioni fisiche<br>':''}
-        <br>Tutti i dati passano per <a href="https://open-meteo.com" style="color:var(--gold-lt)" target="_blank">Open-Meteo</a> (CC BY 4.0).
+      <p style="font-size:11px;color:var(--text-sub);margin-top:14px;line-height:1.8">
+        <strong style="color:var(--text)">Fonti attive per ${city.name}:</strong><br>
+        ${SOURCES.filter(s=>statusMap[s.id]==='ok').map(s=>`${s.flag} <strong style="color:var(--text)">${s.label}</strong>`).join('<br>')}
+        ${S.owmKey?'':'<br><span style="color:var(--gold-lt)">💡 Aggiungi una API key OpenWeatherMap nelle impostazioni per +1 fonte con stazioni fisiche.</span>'}
+        <br><br>Tutti i dati passano per <a href="https://open-meteo.com" style="color:var(--gold-lt)" target="_blank">Open-Meteo</a> (CC BY 4.0).
+        <br><span style="color:var(--text-sub)">I modelli regionali (ICON-2I, COSMO-5M, CH1, CH2, ICON-D2) vengono attivati automaticamente in base alla posizione geografica della città.</span>
       </p>
     </div>`;
 }
