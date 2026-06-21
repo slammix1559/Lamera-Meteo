@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#1a2744">
-<meta name="description" content="Meteo Lamera – previsioni aggregate multi-modello">
+<meta name="description" content="Meteo Italia – previsioni aggregate multi-modello">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Meteo Lamera">
+<meta name="apple-mobile-web-app-title" content="Meteo">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<title>Meteo Lamera</title>
+<title>Meteo Italia</title>
 <style>
 :root{
   --sky-deep:#0d1b3e;--sky-mid:#1a2d5a;--sky-glow:#2563a8;
@@ -178,7 +178,7 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 <body>
 
 <div class="top-bar">
-  <div class="app-title">🌤 Meteo Lamera <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
+  <div class="app-title">🌤 Meteo Italia <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
   <button class="btn-icon" id="btn-open-settings" aria-label="Impostazioni">⚙️</button>
 </div>
 
@@ -721,13 +721,39 @@ function merge(results) {
   };
 
   const dayKeys = Object.keys(dailyMaps.max).sort().slice(0,7);
+
+  // Calcola probabilità pioggia massima oraria per giorno (dalla serie oraria aggregata)
+  // Questo garantisce coerenza tra icona giornaliera e dettaglio orario
+  const hourlyProbByDay = {};
+  const hourlyCodeByDay = {};
+  hourKeys.forEach(k => {
+    const day = k.slice(0,10);
+    const prob = wavg(hourlyMaps.prob[k]) || 0;
+    const code = wmode(hourlyMaps.code[k]) ?? 0;
+    if (!hourlyProbByDay[day] || prob > hourlyProbByDay[day]) hourlyProbByDay[day] = prob;
+    // Tieni il codice meteo più severo della giornata
+    if (!hourlyCodeByDay[day] || code > hourlyCodeByDay[day]) hourlyCodeByDay[day] = code;
+  });
+
+  // Weathercode giornaliero: derivato dalla probabilità oraria massima + codice orario peggiore
+  // così è sempre coerente con quello che si vede nelle ore
+  function dailyCodeFromProb(day) {
+    const maxProb = hourlyProbByDay[day] || 0;
+    const worstCode = hourlyCodeByDay[day] || 0;
+    // Se la prob è alta usa il codice orario peggiore, altrimenti schiarisci
+    if (maxProb >= 60) return Math.max(worstCode, 61);
+    if (maxProb >= 30) return Math.max(worstCode, 51);
+    if (maxProb >= 15) return Math.min(worstCode, 3); // nuvoloso al più
+    return Math.min(worstCode, 2); // sereno/poco nuvoloso
+  }
+
   const daily = {
     time: dayKeys,
     temperature_2m_max: dayKeys.map(k=>wavg(dailyMaps.max[k])),
     temperature_2m_min: dayKeys.map(k=>wavg(dailyMaps.min[k])),
     temperature_max_spread: dayKeys.map(k=>spread(dailyMaps.max[k])),
-    weathercode: dayKeys.map(k=>wmode(dailyMaps.code[k])),
-    precipitation_probability_max: dayKeys.map(k=>wavg(dailyMaps.prob[k])),
+    weathercode: dayKeys.map(k => dailyCodeFromProb(k)),
+    precipitation_probability_max: dayKeys.map(k => hourlyProbByDay[k] ?? wavg(dailyMaps.prob[k])),
     sunrise, sunset,
   };
 
@@ -898,7 +924,7 @@ function renderToday(m, city) {
       <div class="h-time">${isNow?'ora':h+':00'}</div>
       <div class="h-icon">${wIcon(code,isD)}</div>
       <div class="h-temp ${tClass(t)}">${disp(t)}</div>
-      ${rain>5?`<div class="h-rain">💧${rain}%</div>`:''}
+      ${rain>3?`<div class="h-rain">💧${rain}%</div>`:''}
       ${bandStr}
     </div>`;
   }
@@ -964,7 +990,7 @@ function renderWeek(m, city) {
           <span style="font-size:11px;color:var(--text-sub)">${d.getDate()} ${MESI[d.getMonth()]}${sp>2?` <span style="color:var(--gold-lt);font-size:10px">±${Math.round(sp/2)}°</span>`:''}</span>
         </span>
         <span class="day-icon">${wIcon(code,1)}</span>
-        <span class="day-rain">${rain>5?'💧'+rain+'%':''}</span>
+        <span class="day-rain">${rain>3?'💧'+rain+'%':''}</span>
         <span class="day-range"><span class="mn">${disp(minT)} </span><span class="mx ${tClass(maxT)}">${disp(maxT)}</span></span>
         <span class="chevron">›</span>
       </div>
