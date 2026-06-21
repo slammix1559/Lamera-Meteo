@@ -84,16 +84,16 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 .section-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-sub);margin:0 14px 8px}
 
 /* HOURLY */
-.hourly-scroll{overflow-x:auto;padding:0 14px 8px;scrollbar-width:none}
+.hourly-scroll{overflow-x:auto;padding:0 14px 12px;scrollbar-width:none}
 .hourly-scroll::-webkit-scrollbar{display:none}
-.hourly-strip{display:flex;gap:8px;min-width:max-content}
-.hour-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius);padding:11px 9px;text-align:center;min-width:62px;transition:background .2s}
+.hourly-strip{display:flex;gap:8px;min-width:max-content;align-items:stretch}
+.hour-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius);padding:12px 10px;text-align:center;min-width:64px;min-height:115px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;transition:background .2s}
 .hour-card.now{background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.5)}
-.h-time{font-size:11px;color:var(--text-sub);margin-bottom:5px}
-.h-icon{font-size:22px;margin-bottom:6px}
-.h-temp{font-size:15px;font-weight:700;margin-bottom:2px}
-.h-rain{font-size:10px;color:#60a5fa;margin-top:3px}
-.h-spread{font-size:9px;color:var(--text-sub);margin-top:2px}
+.h-time{font-size:11px;color:var(--text-sub)}
+.h-icon{font-size:22px}
+.h-temp{font-size:15px;font-weight:700}
+.h-rain{font-size:10px;color:#60a5fa}
+.h-spread{font-size:9px;color:var(--text-sub)}
 
 /* DAILY */
 .daily-list{margin:0 14px;display:flex;flex-direction:column;gap:6px}
