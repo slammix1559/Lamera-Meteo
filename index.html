@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#1a2744">
-<meta name="description" content="Meteo Italia – previsioni aggregate multi-modello">
+<meta name="description" content="Meteo Lamera – previsioni aggregate multi-modello">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Meteo">
+<meta name="apple-mobile-web-app-title" content="Meteo Lamera">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<title>Meteo Italia</title>
+<title>Meteo Lamera</title>
 <style>
 :root{
   --sky-deep:#0d1b3e;--sky-mid:#1a2d5a;--sky-glow:#2563a8;
@@ -178,7 +178,7 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 <body>
 
 <div class="top-bar">
-  <div class="app-title">🌤 Meteo Italia <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
+  <div class="app-title">🌤 Meteo Lamera <span style="font-size:11px;color:var(--text-sub);font-weight:400;margin-left:4px">multi-modello</span></div>
   <button class="btn-icon" id="btn-open-settings" aria-label="Impostazioni">⚙️</button>
 </div>
 
@@ -737,14 +737,18 @@ function merge(results) {
 
   // Weathercode giornaliero: derivato dalla probabilità oraria massima + codice orario peggiore
   // così è sempre coerente con quello che si vede nelle ore
-  function dailyCodeFromProb(day) {
-    const maxProb = hourlyProbByDay[day] || 0;
+  // ── FIX: icona giorno = condizione oraria peggiore effettiva ──────────
+  // "peggiore" = codice WMO più alto (temporale > pioggia > nuvole > sole)
+  // Garantisce coerenza assoluta: se nel dettaglio orario non compare pioggia,
+  // l'icona del giorno non può mostrare pioggia.
+  function dailyCodeFromHourly(day) {
     const worstCode = hourlyCodeByDay[day] || 0;
-    // Se la prob è alta usa il codice orario peggiore, altrimenti schiarisci
-    if (maxProb >= 60) return Math.max(worstCode, 61);
-    if (maxProb >= 30) return Math.max(worstCode, 51);
-    if (maxProb >= 15) return Math.min(worstCode, 3); // nuvoloso al più
-    return Math.min(worstCode, 2); // sereno/poco nuvoloso
+    const maxProb   = hourlyProbByDay[day] || 0;
+    // Usa il codice orario peggiore direttamente — nessuna trasformazione
+    // Solo se il codice è pioggia/neve/temporale ma la prob è bassissima (<5%),
+    // riduci a nuvoloso per evitare falsi allarmi
+    if (worstCode >= 51 && maxProb < 5) return 3; // coperto ma senza pioggia
+    return worstCode;
   }
 
   const daily = {
@@ -752,7 +756,7 @@ function merge(results) {
     temperature_2m_max: dayKeys.map(k=>wavg(dailyMaps.max[k])),
     temperature_2m_min: dayKeys.map(k=>wavg(dailyMaps.min[k])),
     temperature_max_spread: dayKeys.map(k=>spread(dailyMaps.max[k])),
-    weathercode: dayKeys.map(k => dailyCodeFromProb(k)),
+    weathercode: dayKeys.map(k => dailyCodeFromHourly(k)),
     precipitation_probability_max: dayKeys.map(k => hourlyProbByDay[k] ?? wavg(dailyMaps.prob[k])),
     sunrise, sunset,
   };
@@ -1318,6 +1322,69 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register(base + 'sw.js', { scope: base }).catch(() => {});
   });
 }
+
+  // ── FIX: temperatura in tempo reale ──────────────────
+  // Fetch current_weather separato ad alta frequenza (ogni 10 min)
+  // Usa Best Match che ha aggiornamenti ogni 15 min da stazioni fisiche
+  async function fetchCurrentTemp(lat, lon) {
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&current=temperature_2m,relativehumidity_2m,precipitation,weathercode,windspeed_10m&timezone=Europe%2FRome`;
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d.current ?? d.current_weather ?? null;
+    } catch { return null; }
+  }
+
+  // Aggiorna solo la temperatura attuale senza ricaricare tutto
+  async function refreshCurrentTemp() {
+    if (!S.defaultCity || !S.merged) return;
+    const cur = await fetchCurrentTemp(S.defaultCity.lat, S.defaultCity.lon);
+    if (!cur) return;
+    const temp = cur.temperature_2m ?? cur.temperature;
+    const code = cur.weathercode;
+    const wind = cur.windspeed_10m ?? cur.windspeed;
+    const humid = cur.relativehumidity_2m ?? null;
+    if (temp == null) return;
+    // Aggiorna i valori nel merged esistente
+    S.merged.merged.curTemp = temp;
+    if (code != null) S.merged.merged.curCode = code;
+    if (wind != null) S.merged.merged.curWind = wind;
+    if (humid != null) S.merged.merged.curHumid = humid;
+    // Re-render solo la hero card senza toccare il resto
+    updateHeroTemp(S.merged.merged, S.defaultCity);
+  }
+
+  function updateHeroTemp(m, city) {
+    const heroEl = document.querySelector('.hero');
+    if (!heroEl) return;
+    const {curTemp, curCode, curWind, curHumid, curProb, curIsDay, daily, sunrise, sunset} = m;
+    const maxT = daily.temperature_2m_max[0];
+    const minT = daily.temperature_2m_min[0];
+    heroEl.innerHTML = `
+      <div class="hero-city">📍 <span>${city.name}</span></div>
+      <div class="hero-temp">${dispNum(curTemp??0)}<sup>${S.unit==='celsius'?'°C':'°F'}</sup></div>
+      <div class="hero-cond">${wLabel(curCode)}</div>
+      <div class="hero-icon">${wIcon(curCode,curIsDay)}</div>
+      <div class="hero-meta">
+        <div class="hero-meta-item"><span class="hero-meta-label">Max</span><span class="hero-meta-value ${tClass(maxT)}">${disp(maxT)}</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Min</span><span class="hero-meta-value">${disp(minT)}</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Umidità</span><span class="hero-meta-value">${Math.round(curHumid??0)}%</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Vento</span><span class="hero-meta-value">${Math.round(curWind??0)} km/h</span></div>
+        <div class="hero-meta-item"><span class="hero-meta-label">Pioggia</span><span class="hero-meta-value" style="color:#60a5fa">${Math.round(curProb)}%</span></div>
+        ${sunrise?`<div class="hero-meta-item"><span class="hero-meta-label">Alba/Tramonto</span><span class="hero-meta-value">${sunrise} / ${sunset}</span></div>`:''}
+      </div>`;
+    // Aggiorna anche la card "ora" nella strip
+    const nowCard = document.querySelector('.hour-card.now .h-temp');
+    if (nowCard) { nowCard.textContent = disp(curTemp); nowCard.className = `h-temp ${tClass(curTemp)}`; }
+  }
+
+  // Refresh ogni 10 minuti
+  setInterval(refreshCurrentTemp, 10 * 60 * 1000);
+  // Anche quando la pagina torna visibile (es. riapri dal background)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshCurrentTemp();
+  });
 
 // ═══════════════════════════════════════════════════════
 // BOOT
