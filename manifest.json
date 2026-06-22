@@ -1,6 +1,6 @@
 {
   "name": "Meteo Lamera",
-  "short_name": "Meteo",
+  "short_name": "Meteo Lamera",
   "description": "Previsioni meteo aggregate multi-modello",
   "start_url": "/Lamera-Meteo/",
   "scope": "/Lamera-Meteo/",
