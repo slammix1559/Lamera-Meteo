@@ -368,7 +368,7 @@ const ALL_SOURCES = [
     id: 'italmeteo_icon2i',
     label: 'ARPAE ICON-2I 2km',
     flag: '🇮🇹',
-    weight: 6,               // modello italiano ufficiale, massimo peso
+    weight: 5,               // peso alto: alta risoluzione, disaggregazione temporale applicata
     type: 'openmeteo',
     geo: 'italy',
     endpoint: 'https://api.open-meteo.com/v1/forecast',
@@ -378,7 +378,7 @@ const ALL_SOURCES = [
     id: 'cosmo5m',
     label: 'COSMO-5M LAMI/AM',
     flag: '🇮🇹',
-    weight: 5,               // inizializzato con dati AM Italiana + ECMWF
+    weight: 4,               // peso buono: inizializzato con dati AM Italiana + ECMWF
     type: 'openmeteo',
     geo: 'italy',
     endpoint: 'https://api.open-meteo.com/v1/forecast',
@@ -645,6 +645,97 @@ function normalizeEnsemble(d) {
 }
 
 // ═══════════════════════════════════════════════════════
+// TEMPORAL DISAGGREGATION
+// Per modelli a risoluzione temporale 3h (ICON-2I, COSMO-5M):
+// le ore intermedie vengono interpolate usando la distribuzione
+// percentuale del delta degli altri modelli come guida,
+// vincolando l'arrivo ai valori fissi del modello sparse.
+// ═══════════════════════════════════════════════════════
+function disaggregateSparseModel(sparseData, referenceResults) {
+  const times = sparseData.hourly.time;
+  const sparseTemps = sparseData.hourly.temperature_2m;
+
+  // Costruisce mappa ora→temperatura dai modelli di riferimento (solo quelli orari)
+  const refHourlyMap = {}; // key (YYYY-MM-DDTHH) → avg temp dagli altri modelli
+  referenceResults.forEach(({data, src}) => {
+    if (!data || ['italmeteo_icon2i','cosmo5m'].includes(src.id)) return;
+    (data.hourly.time||[]).forEach((t,i) => {
+      const key = t.slice(0,13);
+      const v = data.hourly.temperature_2m?.[i];
+      if (v != null && !isNaN(v)) {
+        if (!refHourlyMap[key]) refHourlyMap[key] = [];
+        refHourlyMap[key].push(v);
+      }
+    });
+  });
+  // Media dei modelli di riferimento per ogni ora
+  const refAvg = {};
+  Object.keys(refHourlyMap).forEach(k => {
+    refAvg[k] = refHourlyMap[k].reduce((a,b)=>a+b,0) / refHourlyMap[k].length;
+  });
+
+  // Per ogni coppia di punti fissi consecutivi del modello sparse,
+  // genera le ore intermedie usando la distribuzione % dei modelli di riferimento
+  const newTemps = [...sparseTemps];
+
+  for (let i = 0; i < times.length - 1; i++) {
+    const t0 = times[i].slice(0,13);
+    const t1 = times[i+1].slice(0,13);
+    const v0 = sparseTemps[i];
+    const v1 = sparseTemps[i+1];
+    if (v0 == null || v1 == null) continue;
+
+    // Ore tra i due punti fissi
+    const h0 = new Date(t0 + ':00:00');
+    const h1 = new Date(t1 + ':00:00');
+    const gapHours = Math.round((h1 - h0) / 3600000);
+    if (gapHours <= 1) continue; // già orario, nulla da fare
+
+    // Raccoglie i valori di riferimento per ogni ora nell'intervallo
+    const refSlice = [];
+    for (let g = 0; g <= gapHours; g++) {
+      const th = new Date(h0.getTime() + g * 3600000);
+      const key = th.toISOString().slice(0,13);
+      refSlice.push(refAvg[key] ?? null);
+    }
+
+    // Se mancano valori di riferimento, usa interpolazione lineare semplice
+    const hasRef = refSlice.every(v => v != null);
+    const sparseDelta = v1 - v0;
+
+    for (let g = 1; g < gapHours; g++) {
+      // Indice nella serie sparse: trovare la posizione corrispondente
+      const th = new Date(h0.getTime() + g * 3600000);
+      const key = th.toISOString().slice(0,13);
+      const idx = times.indexOf(key + ':00');
+      if (idx < 0) continue; // questa ora non esiste nel vettore sparse, skippa
+
+      let fracProgress;
+      if (hasRef && refSlice[0] != null && refSlice[gapHours] != null) {
+        // Frazione di progresso secondo i modelli di riferimento
+        const refDelta = refSlice[gapHours] - refSlice[0];
+        if (Math.abs(refDelta) > 0.1) {
+          fracProgress = (refSlice[g] - refSlice[0]) / refDelta;
+          // Clamp tra 0 e 1 per evitare extrapolazioni assurde
+          fracProgress = Math.max(0, Math.min(1, fracProgress));
+        } else {
+          fracProgress = g / gapHours; // delta trascurabile, lineare
+        }
+      } else {
+        fracProgress = g / gapHours; // fallback lineare
+      }
+
+      newTemps[idx] = v0 + sparseDelta * fracProgress;
+    }
+  }
+
+  return {
+    ...sparseData,
+    hourly: { ...sparseData.hourly, temperature_2m: newTemps }
+  };
+}
+
+// ═══════════════════════════════════════════════════════
 // WEIGHTED MERGE
 // ═══════════════════════════════════════════════════════
 function merge(results) {
@@ -663,16 +754,21 @@ function merge(results) {
     const w = src.weight;
     totalWeight += w;
 
-    // hourly
-    (data.hourly.time||[]).forEach((t,i)=>{
+    // Modelli a risoluzione 3h: disaggrega le ore intermedie
+    // usando la distribuzione temporale degli altri modelli come guida
+    const isSparse = ['italmeteo_icon2i', 'cosmo5m'].includes(src.id);
+    const effectiveData = isSparse ? disaggregateSparseModel(data, results) : data;
+
+    // hourly — usa effectiveData (disaggregato per modelli sparse, originale per gli altri)
+    (effectiveData.hourly.time||[]).forEach((t,i)=>{
       const key=t.slice(0,13);
       const push=(m,v)=>{if(v!=null&&!isNaN(v)){if(!m[key])m[key]=[];m[key].push({v,w});}};
-      push(hourlyMaps.temp, data.hourly.temperature_2m?.[i]);
-      push(hourlyMaps.prob, data.hourly.precipitation_probability?.[i]);
-      push(hourlyMaps.code, data.hourly.weathercode?.[i]);
-      push(hourlyMaps.humid,data.hourly.relativehumidity_2m?.[i]);
-      push(hourlyMaps.wind, data.hourly.windspeed_10m?.[i]);
-      push(hourlyMaps.isday,data.hourly.is_day?.[i]);
+      push(hourlyMaps.temp, effectiveData.hourly.temperature_2m?.[i]);
+      push(hourlyMaps.prob, effectiveData.hourly.precipitation_probability?.[i]);
+      push(hourlyMaps.code, effectiveData.hourly.weathercode?.[i]);
+      push(hourlyMaps.humid,effectiveData.hourly.relativehumidity_2m?.[i]);
+      push(hourlyMaps.wind, effectiveData.hourly.windspeed_10m?.[i]);
+      push(hourlyMaps.isday,effectiveData.hourly.is_day?.[i]);
     });
 
     // daily
@@ -1323,16 +1419,39 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-  // ── FIX: temperatura in tempo reale ──────────────────
-  // Fetch current_weather separato ad alta frequenza (ogni 10 min)
-  // Usa Best Match che ha aggiornamenti ogni 15 min da stazioni fisiche
+  // ── TEMPERATURA IN TEMPO REALE — multi-sorgente ──────
+  // Interroga 3 endpoint in parallelo e usa la mediana
+  // per compensare il bias sistematico dei singoli modelli
   async function fetchCurrentTemp(lat, lon) {
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&current=temperature_2m,relativehumidity_2m,precipitation,weathercode,windspeed_10m&timezone=Europe%2FRome`;
-      const r = await fetch(url);
-      if (!r.ok) return null;
-      const d = await r.json();
-      return d.current ?? d.current_weather ?? null;
+      const base = `latitude=${lat}&longitude=${lon}&timezone=Europe%2FRome`;
+      const endpoints = [
+        // Best Match — aggiornato ogni 15 min con interpolazione da stazioni
+        `https://api.open-meteo.com/v1/forecast?${base}&current=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m`,
+        // ECMWF — modello più affidabile per temperatura assoluta
+        `https://api.open-meteo.com/v1/ecmwf?${base}&current=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m`,
+        // DWD ICON-EU — alta risoluzione per l'Europa
+        `https://api.open-meteo.com/v1/dwd-icon?${base}&current=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m`,
+      ];
+      const results = await Promise.allSettled(endpoints.map(url =>
+        fetch(url).then(r => r.ok ? r.json() : null).catch(() => null)
+      ));
+      const temps = results
+        .map(r => r.status === 'fulfilled' ? r.value?.current?.temperature_2m : null)
+        .filter(v => v != null && !isNaN(v))
+        .sort((a, b) => a - b);
+      if (!temps.length) return null;
+      // Mediana
+      const mid = Math.floor(temps.length / 2);
+      const medianTemp = temps.length % 2 === 0 ? (temps[mid-1]+temps[mid])/2 : temps[mid];
+      // Prendi metadati (code, wind, humid) dal Best Match
+      const best = results[0].status === 'fulfilled' ? results[0].value?.current : null;
+      return {
+        temperature_2m: medianTemp,
+        weathercode: best?.weathercode ?? null,
+        windspeed_10m: best?.windspeed_10m ?? null,
+        relativehumidity_2m: best?.relativehumidity_2m ?? null,
+      };
     } catch { return null; }
   }
 
@@ -1341,17 +1460,15 @@ if ('serviceWorker' in navigator) {
     if (!S.defaultCity || !S.merged) return;
     const cur = await fetchCurrentTemp(S.defaultCity.lat, S.defaultCity.lon);
     if (!cur) return;
-    const temp = cur.temperature_2m ?? cur.temperature;
+    const temp = cur.temperature_2m;
     const code = cur.weathercode;
-    const wind = cur.windspeed_10m ?? cur.windspeed;
-    const humid = cur.relativehumidity_2m ?? null;
+    const wind = cur.windspeed_10m;
+    const humid = cur.relativehumidity_2m;
     if (temp == null) return;
-    // Aggiorna i valori nel merged esistente
     S.merged.merged.curTemp = temp;
     if (code != null) S.merged.merged.curCode = code;
     if (wind != null) S.merged.merged.curWind = wind;
     if (humid != null) S.merged.merged.curHumid = humid;
-    // Re-render solo la hero card senza toccare il resto
     updateHeroTemp(S.merged.merged, S.defaultCity);
   }
 
@@ -1374,14 +1491,13 @@ if ('serviceWorker' in navigator) {
         <div class="hero-meta-item"><span class="hero-meta-label">Pioggia</span><span class="hero-meta-value" style="color:#60a5fa">${Math.round(curProb)}%</span></div>
         ${sunrise?`<div class="hero-meta-item"><span class="hero-meta-label">Alba/Tramonto</span><span class="hero-meta-value">${sunrise} / ${sunset}</span></div>`:''}
       </div>`;
-    // Aggiorna anche la card "ora" nella strip
     const nowCard = document.querySelector('.hour-card.now .h-temp');
     if (nowCard) { nowCard.textContent = disp(curTemp); nowCard.className = `h-temp ${tClass(curTemp)}`; }
   }
 
-  // Refresh ogni 10 minuti
-  setInterval(refreshCurrentTemp, 10 * 60 * 1000);
-  // Anche quando la pagina torna visibile (es. riapri dal background)
+  // Refresh ogni 5 minuti (era 10)
+  setInterval(refreshCurrentTemp, 5 * 60 * 1000);
+  // Anche quando la pagina torna visibile dal background
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refreshCurrentTemp();
   });
