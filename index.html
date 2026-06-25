@@ -1503,9 +1503,110 @@ if ('serviceWorker' in navigator) {
   });
 
 // ═══════════════════════════════════════════════════════
+// FIREBASE FCM — Notifiche Push
+// ═══════════════════════════════════════════════════════
+const FCM_CONFIG = {
+  apiKey:            "AIzaSyCntjST6fNLBL5RnweG6u7RraXI9Yv7Ec8",
+  authDomain:        "meteo-lamera.firebaseapp.com",
+  projectId:         "meteo-lamera",
+  storageBucket:     "meteo-lamera.firebasestorage.app",
+  messagingSenderId: "551473482266",
+  appId:             "1:551473482266:web:21def21cf0e024fc5bdfa3",
+};
+const VAPID_KEY = "BFKrz4mzx3MNuLwyJfRXcu4bXIu0AACKS73ShWX8Zt36a1pd2S7Pxg_0scz06632KiDOJq9SVb0DFbtjgFTgN2c";
+
+let fcmApp = null, fcmMessaging = null;
+
+async function initFCM() {
+  try {
+    // Carica Firebase SDK dinamicamente (evita di appesantire l'app se non serve)
+    const [{ initializeApp }, { getMessaging, getToken, onMessage }] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js'),
+    ]);
+    fcmApp       = initializeApp(FCM_CONFIG);
+    fcmMessaging = getMessaging(fcmApp);
+
+    // Registra il token FCM e salvalo su Firestore
+    const swReg = await navigator.serviceWorker.ready;
+    const token = await getToken(fcmMessaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+    if (token) {
+      await saveTokenToFirestore(token);
+      console.log('📲 FCM token registrato');
+    }
+
+    // Notifiche in foreground (app aperta)
+    onMessage(fcmMessaging, payload => {
+      const { title, body } = payload.notification || {};
+      if (Notification.permission === 'granted') {
+        new Notification(title || 'Meteo Lamera', { body, icon: '/Lamera-Meteo/icons/icon-192.png' });
+      }
+    });
+  } catch(err) {
+    console.warn('FCM non disponibile:', err.message);
+  }
+}
+
+async function saveTokenToFirestore(token) {
+  const city = S.defaultCity;
+  // Usa REST API Firestore (no SDK necessario)
+  const url = `https://firestore.googleapis.com/v1/projects/meteo-lamera/databases/(default)/documents/fcm_tokens/${token}`;
+  await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields: {
+        token:     { stringValue: token },
+        city:      { stringValue: city?.name || 'Saronno' },
+        lat:       { doubleValue: city?.lat  || 45.6254 },
+        lon:       { doubleValue: city?.lon  || 9.0346  },
+        updatedAt: { stringValue: new Date().toISOString() },
+      }
+    })
+  });
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+  if (Notification.permission === 'granted') {
+    await initFCM();
+    return;
+  }
+  if (Notification.permission === 'denied') return;
+  // Mostra banner di richiesta
+  showNotifyBanner();
+}
+
+function showNotifyBanner() {
+  const existing = document.getElementById('notify-banner');
+  if (existing) return;
+  const banner = document.createElement('div');
+  banner.id = 'notify-banner';
+  banner.style.cssText = 'margin:0 14px 10px;background:rgba(99,179,237,0.15);border:1px solid rgba(99,179,237,0.4);border-radius:8px;padding:10px 13px;font-size:13px;color:#bfdbfe;display:flex;align-items:center;gap:10px;justify-content:space-between';
+  banner.innerHTML = `
+    <span>🔔 Ricevi allerte meteo e previsioni serali?</span>
+    <div style="display:flex;gap:6px">
+      <button id="btn-notify-yes" style="background:#2563a8;border:none;border-radius:6px;color:white;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer">Attiva</button>
+      <button id="btn-notify-no"  style="background:none;border:none;color:#93a8d4;font-size:18px;cursor:pointer;padding:0 4px">✕</button>
+    </div>`;
+  // Inserisci dopo l'install banner
+  const installBanner = document.getElementById('install-banner');
+  installBanner.parentNode.insertBefore(banner, installBanner.nextSibling);
+
+  document.getElementById('btn-notify-yes').addEventListener('click', async () => {
+    banner.remove();
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') await initFCM();
+  });
+  document.getElementById('btn-notify-no').addEventListener('click', () => banner.remove());
+}
+
+// ═══════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════
 loadAll(S.defaultCity);
+// Richiedi permesso notifiche dopo 3 secondi (non subito, disturba)
+setTimeout(requestNotificationPermission, 3000);
 </script>
 </body>
 </html>
