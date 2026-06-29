@@ -39,14 +39,6 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
 /* ALLERTA */
 .allerta-bar{margin:0 14px 10px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:var(--radius-sm);padding:9px 13px;font-size:12px;color:#fca5a5}
 
-/* SOURCES STATUS */
-.sources-bar{margin:0 14px 12px;display:flex;gap:6px;flex-wrap:wrap}
-.src-badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;border:1px solid transparent;display:flex;align-items:center;gap:4px}
-.src-badge.ok{background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);color:#86efac}
-.src-badge.loading{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.3);color:#fcd34d}
-.src-badge.err{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:#fca5a5}
-.src-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
-
 /* HERO */
 .hero{margin:0 14px 14px;background:linear-gradient(135deg,var(--sky-mid) 0%,var(--sky-glow) 100%);border:1px solid var(--card-border);border-radius:22px;padding:22px 20px 18px;position:relative;overflow:hidden}
 .hero::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;background:radial-gradient(circle,rgba(245,158,11,0.18) 0%,transparent 70%);pointer-events:none}
@@ -400,9 +392,9 @@ const ALL_SOURCES = [
     id: 'meteoswiss_ch1',
     label: 'MeteoSwiss CH1 1km',
     flag: '🇨🇭',
-    weight: 6,               // massima risoluzione disponibile per la Lombardia
+    weight: 6,
     type: 'openmeteo',
-    geo: 'north_italy',      // lat > 43.5, lon 6–15
+    geo: 'north_italy',
     endpoint: 'https://api.open-meteo.com/v1/meteoswiss',
     params: HP3 + '&models=icon_ch1',
   },
@@ -416,17 +408,71 @@ const ALL_SOURCES = [
     endpoint: 'https://api.open-meteo.com/v1/meteoswiss',
     params: HP + '&models=icon_ch2',
   },
+
+  // ── MEDITERRANEO / SUD ITALIA ────────────────────────
+  // Attivati per lat < 44 (Centro-Sud, Sicilia, Sardegna, Calabria)
+  {
+    id: 'arpege_europe',
+    label: 'ARPEGE-Europe 11km',
+    flag: '🇫🇷',
+    weight: 5,               // copre Mediterraneo e Nord Africa a 11km, orario
+    type: 'openmeteo',
+    geo: 'mediterranean',
+    endpoint: 'https://api.open-meteo.com/v1/meteofrance',
+    params: HP + '&models=arpege_europe',
+  },
+  {
+    id: 'ecmwf_aifs',
+    label: 'ECMWF AIFS AI',
+    flag: '🤖',
+    weight: 5,               // modello AI ECMWF, ottimo sul Mediterraneo, aggiornato ogni 6h
+    type: 'openmeteo',
+    geo: 'mediterranean',
+    endpoint: 'https://api.open-meteo.com/v1/ecmwf',
+    params: HP + '&models=ecmwf_aifs025',
+  },
+  {
+    id: 'ukmo',
+    label: 'UK Met Office 10km',
+    flag: '🇬🇧',
+    weight: 4,               // modello globale UK, buona copertura Mediterraneo
+    type: 'openmeteo',
+    geo: 'mediterranean',
+    endpoint: 'https://api.open-meteo.com/v1/ukmo',
+    params: HP,
+  },
+  {
+    id: 'jma',
+    label: 'JMA MSM Japan',
+    flag: '🇯🇵',
+    weight: 3,               // servizio meteo giapponese, modello globale indipendente
+    type: 'openmeteo',
+    geo: 'mediterranean',
+    endpoint: 'https://api.open-meteo.com/v1/jma',
+    params: HP,
+  },
+  {
+    id: 'cma',
+    label: 'CMA GFS China',
+    flag: '🇨🇳',
+    weight: 3,               // servizio meteo cinese, voce globale indipendente
+    type: 'openmeteo',
+    geo: 'mediterranean',
+    endpoint: 'https://api.open-meteo.com/v1/cma',
+    params: HP,
+  },
 ];
 
 // Determina geograficamente quali modelli sono attivi per la città
 function getActiveSources(lat, lon) {
   return ALL_SOURCES.filter(src => {
     switch(src.geo) {
-      case 'global':      return true;
-      case 'europe':      return lat >= 35 && lat <= 72 && lon >= -10 && lon <= 40;
-      case 'italy':       return lat >= 36 && lat <= 48 && lon >= 6  && lon <= 20;
-      case 'north_italy': return lat >= 43.5 && lat <= 48 && lon >= 6 && lon <= 15;
-      default:            return false;
+      case 'global':        return true;
+      case 'europe':        return lat >= 35 && lat <= 72 && lon >= -10 && lon <= 40;
+      case 'italy':         return lat >= 36 && lat <= 48 && lon >= 6  && lon <= 20;
+      case 'north_italy':   return lat >= 43.5 && lat <= 48 && lon >= 6 && lon <= 15;
+      case 'mediterranean': return lat < 44 && lat >= 30 && lon >= -10 && lon <= 40;
+      default:              return false;
     }
   });
 }
@@ -1038,7 +1084,6 @@ function renderToday(m, city) {
 
   document.getElementById('main-content').innerHTML = `
     ${allerta}
-    <div id="sources-bar" class="sources-bar"></div>
     <div class="hero">
       <div class="hero-city">📍 <span>${city.name}</span></div>
       <div class="hero-temp">${dispNum(curTemp??0)}<sup>${S.unit==='celsius'?'°C':'°F'}</sup></div>
@@ -1495,11 +1540,69 @@ if ('serviceWorker' in navigator) {
     if (nowCard) { nowCard.textContent = disp(curTemp); nowCard.className = `h-temp ${tClass(curTemp)}`; }
   }
 
-  // Refresh ogni 5 minuti (era 10)
-  setInterval(refreshCurrentTemp, 5 * 60 * 1000);
-  // Anche quando la pagina torna visibile dal background
+  // ── INTERPOLAZIONE CONTINUA ───────────────────────────
+  // Ogni minuto calcola la temperatura interpolata linearmente
+  // tra il valore dell'ora corrente e quello dell'ora successiva.
+  // Così alle 11:42 mostra (T11 * 0.3 + T12 * 0.7) — nessun salto brusco.
+  // Ogni 15 minuti ri-fetchja i dati reali dal server.
+
+  let lastRealFetch = 0;
+
+  function interpolateTemp() {
+    if (!S.merged) return;
+    const { hourly, daily, curCode, curWind, curHumid, curProb, curIsDay, sunrise, sunset } = S.merged.merged;
+
+    const now     = new Date();
+    const nowMin  = now.getMinutes();          // 0–59
+    const frac    = nowMin / 60;               // frazione dell'ora trascorsa (0.0–1.0)
+    const nowKey  = now.toISOString().slice(0, 13);   // es. "2026-06-29T11"
+    const nextH   = new Date(now); nextH.setHours(now.getHours() + 1, 0, 0, 0);
+    const nextKey = nextH.toISOString().slice(0, 13);
+
+    const idxCur  = hourly.time.findIndex(t => t.slice(0, 13) === nowKey);
+    const idxNext = hourly.time.findIndex(t => t.slice(0, 13) === nextKey);
+
+    let interpolated;
+    if (idxCur >= 0 && idxNext >= 0) {
+      const tCur  = hourly.temperature_2m[idxCur];
+      const tNext = hourly.temperature_2m[idxNext];
+      if (tCur != null && tNext != null) {
+        interpolated = tCur + (tNext - tCur) * frac;
+      }
+    }
+    // Fallback: usa curTemp dal merge (valore reale o ultimo fetch)
+    if (interpolated == null) interpolated = S.merged.merged.curTemp;
+    if (interpolated == null) return;
+
+    // Aggiorna solo i valori visibili — non ri-renderizza tutto
+    const heroTempEl = document.querySelector('.hero .hero-temp');
+    if (heroTempEl) {
+      heroTempEl.innerHTML = `${dispNum(interpolated)}<sup>${S.unit === 'celsius' ? '°C' : '°F'}</sup>`;
+    }
+    const nowCard = document.querySelector('.hour-card.now .h-temp');
+    if (nowCard) {
+      nowCard.textContent = disp(interpolated);
+      nowCard.className   = `h-temp ${tClass(interpolated)}`;
+    }
+
+    // Ogni 15 minuti ri-fetchja i dati reali e aggiorna curTemp
+    const elapsed = Date.now() - lastRealFetch;
+    if (elapsed > 15 * 60 * 1000) {
+      lastRealFetch = Date.now();
+      refreshCurrentTemp();
+    }
+  }
+
+  // Aggiorna subito e poi ogni minuto
+  interpolateTemp();
+  setInterval(interpolateTemp, 60 * 1000);
+
+  // Quando la pagina torna visibile ri-fetchja subito i dati reali
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') refreshCurrentTemp();
+    if (document.visibilityState === 'visible') {
+      lastRealFetch = 0; // forza re-fetch al prossimo tick
+      interpolateTemp();
+    }
   });
 
 // ═══════════════════════════════════════════════════════
