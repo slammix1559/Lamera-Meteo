@@ -1,13 +1,10 @@
-name: Meteo Lamera — Notifiche Push
+name: Meteo Lamera - Notifiche Push
 
 on:
   schedule:
-    # Ogni sera alle 20:30 ora italiana (18:30 UTC in estate, 19:30 in inverno)
-    # Usiamo 18:30 UTC che corrisponde alle 20:30 CEST (estate)
     - cron: '30 18 * * *'
-    # Controllo eventi estremi ogni ora dalle 6 alle 22
     - cron: '0 5-20 * * *'
-  workflow_dispatch:   # permette esecuzione manuale dalla console GitHub
+  workflow_dispatch:
 
 jobs:
   send-notifications:
