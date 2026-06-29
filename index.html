@@ -235,6 +235,17 @@ body{background:var(--sky-deep);color:var(--text);min-height:100vh;padding-botto
       <option value="fahrenheit">Fahrenheit (°F)</option>
     </select>
   </div>
+
+  <div class="field-group">
+    <div class="field-label">Notifiche Push <span id="notif-status-label" style="font-size:10px;margin-left:6px"></span></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn-primary" id="btn-test-notif-local" style="margin:0;background:var(--sky-glow)">🔔 Test notifica locale</button>
+      <button class="btn-primary" id="btn-test-notif-daily" style="margin:0;background:rgba(255,255,255,0.08);color:var(--text);border:1px solid var(--card-border)">📅 Simula notifica serale</button>
+      <button class="btn-primary" id="btn-test-notif-extreme" style="margin:0;background:rgba(239,68,68,0.2);color:#fca5a5;border:1px solid rgba(239,68,68,0.3)">⚠️ Simula allerta estrema</button>
+    </div>
+    <div id="notif-test-result" style="font-size:12px;color:var(--text-sub);margin-top:8px;line-height:1.6"></div>
+    <div class="apikey-hint" style="margin-top:6px">Il token FCM viene salvato su Firestore quando attivi le notifiche. Controlla la collezione <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px">fcm_tokens</code> nella Firebase Console.</div>
+  </div>
 </div>
 
 <script>
@@ -1604,6 +1615,92 @@ if ('serviceWorker' in navigator) {
       interpolateTemp();
     }
   });
+
+// ═══════════════════════════════════════════════════════
+// NOTIFICATION TEST HANDLERS
+// ═══════════════════════════════════════════════════════
+function updateNotifStatusLabel() {
+  const el = document.getElementById('notif-status-label');
+  if (!el) return;
+  const perm = Notification.permission;
+  if (perm === 'granted')  { el.textContent = '✅ Attive';   el.style.color = '#86efac'; }
+  if (perm === 'denied')   { el.textContent = '❌ Bloccate'; el.style.color = '#fca5a5'; }
+  if (perm === 'default')  { el.textContent = '⏳ Non ancora attivate'; el.style.color = '#fcd34d'; }
+}
+
+document.getElementById('btn-test-notif-local').addEventListener('click', async () => {
+  const res = document.getElementById('notif-test-result');
+  if (!('Notification' in window)) { res.textContent = '❌ Notifiche non supportate su questo browser.'; return; }
+  if (Notification.permission === 'denied') {
+    res.innerHTML = '❌ Notifiche bloccate dal browser.<br>Vai in Impostazioni del browser → Notifiche → sblocca questo sito.';
+    return;
+  }
+  if (Notification.permission !== 'granted') {
+    res.textContent = '⏳ Richiedo permesso…';
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { res.textContent = '❌ Permesso negato.'; return; }
+    await initFCM();
+  }
+  // Notifica locale immediata (non passa per FCM)
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification('🌤 Meteo Lamera — Test', {
+      body: `Notifica di test funzionante! Ora: ${new Date().toLocaleTimeString('it-IT')}`,
+      icon: '/Lamera-Meteo/icons/icon-192.png',
+      badge: '/Lamera-Meteo/icons/icon-192.png',
+      vibrate: [200, 100, 200],
+      tag: 'test-local',
+    });
+    res.innerHTML = '✅ Notifica locale inviata! Dovresti vederla comparire.<br><span style="color:#86efac">Se è apparsa, il Service Worker funziona correttamente.</span>';
+  } catch(e) {
+    res.textContent = '❌ Errore: ' + e.message;
+  }
+  updateNotifStatusLabel();
+});
+
+document.getElementById('btn-test-notif-daily').addEventListener('click', async () => {
+  const res = document.getElementById('notif-test-result');
+  if (Notification.permission !== 'granted') { res.textContent = '⚠️ Prima attiva le notifiche con il pulsante sopra.'; return; }
+  try {
+    // Costruisce una notifica serale simulata con dati reali
+    const city = S.defaultCity;
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&forecast_days=2&timezone=Europe%2FRome`);
+    const d = await r.json();
+    const maxT = Math.round(d.daily.temperature_2m_max[1]);
+    const minT = Math.round(d.daily.temperature_2m_min[1]);
+    const prob = Math.round(d.daily.precipitation_probability_max[1] || 0);
+    const domani = new Date(); domani.setDate(domani.getDate()+1);
+    const giorni = ['domenica','lunedì','martedì','mercoledì','giovedì','venerdì','sabato'];
+    const mesi   = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+    const dateLabel = `${giorni[domani.getDay()]} ${domani.getDate()} ${mesi[domani.getMonth()]}`;
+    const body = `Max ${maxT}°C / Min ${minT}°C${prob>20?' · 💧'+prob+'%':''}`;
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(`🌤 Meteo ${city.name} — ${dateLabel}`, {
+      body, icon: '/Lamera-Meteo/icons/icon-192.png', badge: '/Lamera-Meteo/icons/icon-192.png',
+      vibrate: [200, 100, 200], tag: 'test-daily',
+    });
+    res.innerHTML = `✅ Notifica serale simulata con dati reali di domani.<br><span style="color:#86efac">Se è apparsa, anche GitHub Actions funzionerà alle 20:30.</span>`;
+  } catch(e) { res.textContent = '❌ Errore: ' + e.message; }
+});
+
+document.getElementById('btn-test-notif-extreme').addEventListener('click', async () => {
+  const res = document.getElementById('notif-test-result');
+  if (Notification.permission !== 'granted') { res.textContent = '⚠️ Prima attiva le notifiche con il pulsante sopra.'; return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(`⚠️ Allerta Meteo — ${S.defaultCity?.name || 'Saronno'}`, {
+      body: '⛈️ Temporale alle 15:00 (75%)\n🌨️ Grandine possibile alle 15:00 (45%)',
+      icon: '/Lamera-Meteo/icons/icon-192.png', badge: '/Lamera-Meteo/icons/icon-192.png',
+      vibrate: [300, 100, 300, 100, 300],
+      requireInteraction: true,
+      tag: 'test-extreme',
+    });
+    res.innerHTML = '✅ Allerta estrema simulata!<br><span style="color:#86efac">requireInteraction=true: rimane visibile finché non la tocchi.</span>';
+  } catch(e) { res.textContent = '❌ Errore: ' + e.message; }
+});
+
+// Aggiorna stato notifiche quando si apre il drawer
+document.getElementById('btn-open-settings').addEventListener('click', updateNotifStatusLabel, { capture: true });
 
 // ═══════════════════════════════════════════════════════
 // FIREBASE FCM — Notifiche Push
