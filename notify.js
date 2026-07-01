@@ -275,8 +275,9 @@ async function main() {
   const hourUTC = nowUTC.getUTCHours();
   const minUTC  = nowUTC.getUTCMinutes();
 
-  // 18:30 UTC = 20:30 CEST (estate) → notifica serale
-  const isSerale = hourUTC === 18 && minUTC >= 25 && minUTC <= 35;
+  // 05:00 UTC = 07:00 CEST (test mattutino) OPPURE 18:30 UTC = 20:30 CEST (serale)
+  const isSerale = (hourUTC === 5 && minUTC >= 55 && minUTC <= 65) ||
+                   (hourUTC === 18 && minUTC >= 25 && minUTC <= 35);
 
   if (isSerale) {
     await notificaSerale(tokens);
