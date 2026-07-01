@@ -2,7 +2,7 @@ name: Meteo Lamera - Notifiche Push
 
 on:
   schedule:
-    - cron: '41 18 * * *'
+    - cron: '58 4 * * *'
     - cron: '0 5-20 * * *'
   workflow_dispatch:
 
